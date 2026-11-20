@@ -82,6 +82,12 @@ export function createGcodeEditor(
   return editor;
 }
 
+/** Replaces the editor contents when a different file is opened. */
+export function setEditorText(editor: GcodeEditor, text: string): void {
+  editor.setValue(text);
+  editor.setPosition({ lineNumber: 1, column: 1 });
+}
+
 export function setDiagnostics(
   editor: GcodeEditor,
   diagnostics: Diagnostic[],

@@ -5,8 +5,15 @@ import {
   createGcodeEditor,
   revealDiagnostic,
   setDiagnostics,
+  setEditorText,
   type GcodeEditor,
 } from './monaco-gcode';
+import {
+  platformFileIO,
+  type LoadedFile,
+  type LoadedFolder,
+} from './platform';
+import { buildSubprograms, mainFileFromFolder } from './program-set';
 import { sampleProgram } from './sample-program';
 import {
   builtinFlavors,
@@ -37,6 +44,10 @@ export function App() {
     builtinUserPreferences.defaultVariantByFlavor[builtinFlavors[0].id],
   );
   const [text, setText] = useState(sampleProgram);
+  const [currentFile, setCurrentFile] = useState<LoadedFile | null>(null);
+  const [project, setProject] = useState<LoadedFolder | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [filter, setFilter] = useState<SeverityFilter>('all');
   const [editorReady, setEditorReady] = useState(false);
   const [backplotReady, setBackplotReady] = useState(false);
@@ -51,9 +62,14 @@ export function App() {
     () => builtinProfile(flavorId, variantId),
     [flavorId, variantId],
   );
+  const fileName = currentFile?.name ?? 'program.nc';
+  const subprograms = useMemo(
+    () => (project ? buildSubprograms(project, currentFile?.path) : []),
+    [project, currentFile],
+  );
   const analysis = useMemo(
-    () => analyzeProgram(text, 'program.nc', profile!),
-    [text, profile],
+    () => analyzeProgram(text, fileName, profile!, subprograms),
+    [text, fileName, profile, subprograms],
   );
   const moves = useMemo(
     () => collectMoves(analysis.evaluation),
@@ -143,6 +159,50 @@ export function App() {
     );
   }
 
+  function loadFile(file: LoadedFile) {
+    setCurrentFile(file);
+    setText(file.text);
+    if (editorRef.current) setEditorText(editorRef.current, file.text);
+    setNotice(null);
+  }
+
+  async function handleOpenProgram() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const file = await platformFileIO.openProgram();
+      if (file) loadFile(file);
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : 'Could not open the program.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleOpenProject() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const folder = await platformFileIO.openProject();
+      if (!folder) return;
+      setProject(folder);
+      const main = mainFileFromFolder(folder);
+      if (main) {
+        loadFile(main);
+      } else {
+        setNotice(`No G-code files found in ${folder.name}.`);
+      }
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : 'Could not open the folder.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <header className="toolbar">
@@ -154,6 +214,15 @@ export function App() {
             <h1>GCode IDE</h1>
             <p>Verification workbench</p>
           </div>
+        </div>
+
+        <div className="file-actions">
+          <button type="button" onClick={handleOpenProgram} disabled={busy}>
+            Open program…
+          </button>
+          <button type="button" onClick={handleOpenProject} disabled={busy}>
+            Open project folder…
+          </button>
         </div>
 
         <div className="controls">
@@ -193,10 +262,25 @@ export function App() {
       </header>
 
       <main className="workbench">
+        {notice && (
+          <div className="notice" role="alert">
+            <span>{notice}</span>
+            <button
+              type="button"
+              aria-label="Dismiss message"
+              onClick={() => setNotice(null)}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         <section className="pane editor-pane" aria-labelledby="editor-heading">
           <div className="pane-header">
             <h2 id="editor-heading">Program</h2>
-            <span className="pane-hint">program.nc · in memory</span>
+            <span className="pane-hint">
+              {fileName} · {currentFile ? 'opened' : 'in memory'}
+            </span>
           </div>
           <div className="editor-host" ref={editorHostRef} />
         </section>
@@ -304,10 +388,16 @@ export function App() {
         <span>
           {counts.all} diagnostics ({counts.error} errors)
         </span>
+        {subprograms.length > 0 && (
+          <span>
+            {project?.name}: {subprograms.length} subprograms
+          </span>
+        )}
         {analysis.evaluation.approximate && (
           <span>Approximate macro evaluation</span>
         )}
         <span className="status-spacer" />
+        <span>{platformFileIO.native ? 'Desktop' : 'Browser'}</span>
         <span>{flavor.name}</span>
       </footer>
     </div>

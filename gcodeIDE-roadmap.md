@@ -242,10 +242,10 @@ Proposed impact (pending confirmation):
 
 ## Next steps
 
-1. Add native file open and platform-side project folder → `ProgramSet` resolution for externally stored subprograms.
-2. Refactor move emission into the canonical `Move[]` interpreter output under `core/interpreter` and feed the backplot from it.
-3. Add stock height-map simulation and the two geometry-dependent rules (`rapid-through-stock`, `unsafe-z-clearance`) end-to-end.
-4. Expand reference programs for each flavor (arcs, cycles, offsets, macros) as negative corpus cases are added.
+1. Refactor move emission into the canonical `Move[]` interpreter output under `core/interpreter` and feed the backplot from it.
+2. Add stock height-map simulation and the two geometry-dependent rules (`rapid-through-stock`, `unsafe-z-clearance`) end-to-end.
+3. Expand reference programs for each flavor (arcs, cycles, offsets, macros) as negative corpus cases are added.
+4. Add save / dirty-state handling and a project file format for persisting flavor, variant, and folder association.
 
 ### Implementation status
 
@@ -259,7 +259,8 @@ Proposed impact (pending confirmation):
 | Corpus tests | Golden executed-block and move counts for all 10 Brother files. |
 | Subprogram execution | `M98`/`M99` call stack, repeat counts, depth limit, `ProgramSet` file resolution. |
 | Other flavors | Built-in Haas, Fanuc, GRBL, LinuxCNC + reference programs in `test/fixtures/programs/`. |
-| Tauri shell / UI | Tauri 2 shell scaffolded in `src-tauri/`; Monaco editor, diagnostics panel, and three.js backplot wired in memory. Native file open pending. |
+| Tauri shell / UI | Tauri 2 shell with Monaco editor, diagnostics panel, and three.js backplot. Native file/folder open via dialog plugin + Rust read commands; browser fallback for `pnpm dev`. |
+| Project loading | Opening a program reads it into Monaco; opening a folder loads G-code files as the main program plus external subprograms for `M98`/`M99` resolution. Save/dirty state pending. |
 
 ---
 

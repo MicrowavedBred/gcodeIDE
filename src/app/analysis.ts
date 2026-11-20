@@ -34,9 +34,13 @@ export function analyzeProgram(
   text: string,
   file: string,
   profile: ResolvedMachineProfile,
+  subprograms: ParsedProgram[] = [],
 ): ProgramAnalysis {
   const program = parseProgram(text, file);
-  const evaluation = evaluateProgram(program, profile);
+  const evaluation = evaluateProgram(
+    subprograms.length > 0 ? { main: program, subprograms } : program,
+    profile,
+  );
   const policyDiagnostics = runRules({ profile, program, evaluation });
 
   const unique = new Map<string, Diagnostic>();
