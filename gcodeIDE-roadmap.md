@@ -242,8 +242,8 @@ Proposed impact (pending confirmation):
 
 ## Next steps
 
-1. Expand reference programs for each flavor (arcs, cycles, offsets, macros) as negative corpus cases are added.
-2. Add a project file format for persisting flavor, variant, and folder association.
+1. Add a project file format for persisting flavor, variant, and folder association.
+2. Expand negative corpus cases as more real-world programs become available.
 3. Consider finer tool geometry (ball/bull nose) and a simulation worker for large programs.
 
 ### Implementation status
@@ -257,7 +257,7 @@ Proposed impact (pending confirmation):
 | Brother flavor | Built-in; S700XD2 variant + unbounded `unspecified` default. |
 | Corpus tests | Golden executed-block and move counts for all 10 Brother files. |
 | Subprogram execution | `M98`/`M99` call stack, repeat counts, depth limit, `ProgramSet` file resolution. |
-| Other flavors | Built-in Haas, Fanuc, GRBL, LinuxCNC + reference programs in `test/fixtures/programs/`. |
+| Other flavors | Built-in Haas, Fanuc, GRBL, LinuxCNC + ten synthetic reference programs in `test/fixtures/programs/` with golden execution traces. Coverage includes arcs, cycles, offsets, cutter comp, macros, 4-axis positioning, and a GRBL negative path. |
 | Tauri shell / UI | Tauri 2 shell with Monaco editor, diagnostics panel, and three.js backplot. Native file/folder open via dialog plugin + Rust read commands; browser fallback for `pnpm dev`. |
 | Project loading | Opening a program reads it into Monaco; opening a folder loads G-code files as the main program plus external subprograms for `M98`/`M99` resolution. |
 | Save / dirty state | Save, Save as, Ctrl/Cmd+S, unsaved marker, and an unsaved-changes guard on open. Native writes go through a bounded Rust command; browser dev falls back to a text download. Project-file persistence is still pending. |
