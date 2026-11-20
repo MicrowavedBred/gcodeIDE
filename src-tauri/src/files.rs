@@ -40,6 +40,16 @@ fn display_name(path: &Path) -> String {
         .to_string()
 }
 
+fn validate_write_text(text: &str) -> Result<(), String> {
+    if text.len() as u64 > MAX_FILE_BYTES {
+        return Err(format!(
+            "Program is larger than {} MB",
+            MAX_FILE_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(())
+}
+
 fn read_text(path: &Path) -> Result<String, String> {
     let metadata = fs::metadata(path)
         .map_err(|error| format!("Cannot inspect {}: {error}", path.display()))?;
@@ -112,6 +122,15 @@ pub fn read_program_file(path: String) -> Result<LoadedFile, String> {
 }
 
 #[tauri::command]
+pub fn write_program_file(path: String, text: String) -> Result<LoadedFile, String> {
+    validate_write_text(&text)?;
+    let path = PathBuf::from(path);
+    fs::write(&path, text.as_bytes())
+        .map_err(|error| format!("Cannot write {}: {error}", path.display()))?;
+    Ok(to_loaded_file(&path, text))
+}
+
+#[tauri::command]
 pub fn read_project_folder(path: String) -> Result<LoadedFolder, String> {
     let root = PathBuf::from(path);
     let metadata = fs::metadata(&root)
@@ -147,5 +166,26 @@ mod tests {
         assert!(is_gcode_file(Path::new("probe.TAP")));
         assert!(!is_gcode_file(Path::new("setup-sheet.pdf")));
         assert!(!is_gcode_file(Path::new("program")));
+    }
+
+    #[test]
+    fn writes_and_round_trips_a_program() {
+        let path = std::env::temp_dir().join(format!(
+            "gcodeide-save-test-{}.nc",
+            std::process::id()
+        ));
+        let path = path.to_string_lossy().into_owned();
+        let text = "G21 G90 G0 X0\nM30\n";
+
+        let saved = write_program_file(path.clone(), text.to_string()).unwrap();
+        assert_eq!(saved.text, text);
+        assert_eq!(read_program_file(path.clone()).unwrap().text, text);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn rejects_oversized_writes() {
+        let text = "x".repeat(MAX_FILE_BYTES as usize + 1);
+        assert!(write_program_file("unused.nc".to_string(), text).is_err());
     }
 }

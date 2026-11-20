@@ -6,6 +6,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             files::read_program_file,
+            files::write_program_file,
             files::read_project_folder
         ])
         .setup(|app| {

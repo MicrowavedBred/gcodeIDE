@@ -243,7 +243,7 @@ Proposed impact (pending confirmation):
 ## Next steps
 
 1. Expand reference programs for each flavor (arcs, cycles, offsets, macros) as negative corpus cases are added.
-2. Add save / dirty-state handling and a project file format for persisting flavor, variant, and folder association.
+2. Add a project file format for persisting flavor, variant, and folder association.
 3. Consider finer tool geometry (ball/bull nose) and a simulation worker for large programs.
 
 ### Implementation status
@@ -259,7 +259,8 @@ Proposed impact (pending confirmation):
 | Subprogram execution | `M98`/`M99` call stack, repeat counts, depth limit, `ProgramSet` file resolution. |
 | Other flavors | Built-in Haas, Fanuc, GRBL, LinuxCNC + reference programs in `test/fixtures/programs/`. |
 | Tauri shell / UI | Tauri 2 shell with Monaco editor, diagnostics panel, and three.js backplot. Native file/folder open via dialog plugin + Rust read commands; browser fallback for `pnpm dev`. |
-| Project loading | Opening a program reads it into Monaco; opening a folder loads G-code files as the main program plus external subprograms for `M98`/`M99` resolution. Save/dirty state pending. |
+| Project loading | Opening a program reads it into Monaco; opening a folder loads G-code files as the main program plus external subprograms for `M98`/`M99` resolution. |
+| Save / dirty state | Save, Save as, Ctrl/Cmd+S, unsaved marker, and an unsaved-changes guard on open. Native writes go through a bounded Rust command; browser dev falls back to a text download. Project-file persistence is still pending. |
 | Canonical toolpath | `core/interpreter` derives ordered `Move[]`, sampled geometry, bounds, counts and travel lengths; the three.js backplot is a thin renderer. `R`-only arcs still draw as straight chords. |
 | Stock simulation | `core/simulation` sweeps a cylindrical tool through a 2.5D height map; toolbar configures stock size, top Z, tool diameter and safe Z. `rapid-through-stock` uses time-of-execution penetration evidence; `unsafe-z-clearance` activates from configured safe Z. Backplot draws the envelope and remaining-material surface. |
 

@@ -49,10 +49,12 @@ export function App() {
     builtinUserPreferences.defaultVariantByFlavor[builtinFlavors[0].id],
   );
   const [text, setText] = useState(sampleProgram);
+  const [savedText, setSavedText] = useState(sampleProgram);
   const [currentFile, setCurrentFile] = useState<LoadedFile | null>(null);
   const [project, setProject] = useState<LoadedFolder | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [filter, setFilter] = useState<SeverityFilter>('all');
   const [stockEnabled, setStockEnabled] = useState(false);
   const [stockX, setStockX] = useState(100);
@@ -68,6 +70,7 @@ export function App() {
   const editorRef = useRef<GcodeEditor | null>(null);
   const backplotHostRef = useRef<HTMLDivElement>(null);
   const backplotRef = useRef<BackplotHandle | null>(null);
+  const pendingOpenRef = useRef<(() => void) | null>(null);
 
   const flavor = builtinFlavorsById.get(flavorId) ?? builtinFlavors[0];
   const profile = useMemo(
@@ -110,6 +113,7 @@ export function App() {
   );
   const toolpath = analysis.toolpath;
   const simulation = analysis.simulation;
+  const dirty = text !== savedText;
 
   useEffect(() => {
     const host = editorHostRef.current;
@@ -159,6 +163,27 @@ export function App() {
     if (backplotReady) backplotRef.current?.setStock(simulation);
   }, [simulation, backplotReady]);
 
+  useEffect(() => {
+    function warnOnUnload(event: BeforeUnloadEvent) {
+      if (!dirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    }
+    window.addEventListener('beforeunload', warnOnUnload);
+    return () => window.removeEventListener('beforeunload', warnOnUnload);
+  }, [dirty]);
+
+  useEffect(() => {
+    function handleShortcut(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        void saveCurrent();
+      }
+    }
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, [text, currentFile, busy]);
+
   const counts = useMemo(() => {
     const result: Record<SeverityFilter, number> = {
       all: analysis.diagnostics.length,
@@ -192,11 +217,66 @@ export function App() {
   function loadFile(file: LoadedFile) {
     setCurrentFile(file);
     setText(file.text);
+    setSavedText(file.text);
     if (editorRef.current) setEditorText(editorRef.current, file.text);
     setNotice(null);
   }
 
-  async function handleOpenProgram() {
+  async function saveCurrent(saveAs = false): Promise<boolean> {
+    if (busy) return false;
+    setBusy(true);
+    try {
+      const file: LoadedFile = currentFile ?? {
+        path: 'program.nc',
+        name: 'program.nc',
+        text,
+      };
+      const target =
+        !currentFile || saveAs
+          ? await platformFileIO.saveProgramAs({ ...file, text })
+          : await platformFileIO.saveProgram({ ...file, text });
+      if (!target) return false;
+      setCurrentFile(target);
+      setSavedText(text);
+      setNotice(null);
+      return true;
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : 'Could not save the program.',
+      );
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function requestOpen(action: () => void) {
+    if (dirty) {
+      pendingOpenRef.current = action;
+      setConfirmOpen(true);
+      return;
+    }
+    action();
+  }
+
+  function cancelOpen() {
+    pendingOpenRef.current = null;
+    setConfirmOpen(false);
+  }
+
+  function discardOpen() {
+    const action = pendingOpenRef.current;
+    pendingOpenRef.current = null;
+    setConfirmOpen(false);
+    action?.();
+  }
+
+  async function saveAndOpen() {
+    if (!(await saveCurrent())) return;
+    discardOpen();
+  }
+
+  async function doOpenProgram() {
     if (busy) return;
     setBusy(true);
     try {
@@ -211,7 +291,7 @@ export function App() {
     }
   }
 
-  async function handleOpenProject() {
+  async function doOpenProject() {
     if (busy) return;
     setBusy(true);
     try {
@@ -233,6 +313,9 @@ export function App() {
     }
   }
 
+  const handleOpenProgram = () => requestOpen(() => void doOpenProgram());
+  const handleOpenProject = () => requestOpen(() => void doOpenProject());
+
   return (
     <div className="app-shell">
       <header className="toolbar">
@@ -252,6 +335,21 @@ export function App() {
           </button>
           <button type="button" onClick={handleOpenProject} disabled={busy}>
             Open project folder…
+          </button>
+          <button
+            type="button"
+            onClick={() => void saveCurrent()}
+            disabled={busy}
+            title="Save (Ctrl/Cmd+S)"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={() => void saveCurrent(true)}
+            disabled={busy}
+          >
+            Save as…
           </button>
         </div>
 
@@ -390,11 +488,37 @@ export function App() {
           </div>
         )}
 
+        {confirmOpen && (
+          <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+            <div className="confirm-card">
+              <h2 id="confirm-title">Unsaved changes</h2>
+              <p>{fileName} has edits that have not been saved.</p>
+              <div className="confirm-actions">
+                <button type="button" onClick={cancelOpen} autoFocus>
+                  Cancel
+                </button>
+                <button type="button" onClick={discardOpen}>
+                  Discard and open
+                </button>
+                <button type="button" onClick={() => void saveAndOpen()} disabled={busy}>
+                  Save and open
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <section className="pane editor-pane" aria-labelledby="editor-heading">
           <div className="pane-header">
             <h2 id="editor-heading">Program</h2>
             <span className="pane-hint">
-              {fileName} · {currentFile ? 'opened' : 'in memory'}
+              {fileName}
+              {dirty && (
+                <span className="dirty-marker" title="Unsaved changes">
+                  {' • unsaved'}
+                </span>
+              )}{' '}
+              · {currentFile ? 'opened' : 'in memory'}
             </span>
           </div>
           <div className="editor-host" ref={editorHostRef} />
@@ -506,6 +630,7 @@ export function App() {
 
       <footer className="status-bar">
         <span>{analysis.program.blocks.length} blocks</span>
+        {dirty && <span>Unsaved changes</span>}
         <span>Travel {toolpath.lengthsMm.total.toFixed(1)} mm</span>
         {simulation && (
           <span>

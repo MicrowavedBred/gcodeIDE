@@ -17,6 +17,10 @@ export interface PlatformFileIO {
   readonly native: boolean;
   openProgram(): Promise<LoadedFile | null>;
   openProject(): Promise<LoadedFolder | null>;
+  /** Writes back to an already resolved path; browser dev downloads instead. */
+  saveProgram(file: LoadedFile): Promise<LoadedFile | null>;
+  /** Always prompts for a destination (or downloads in the browser). */
+  saveProgramAs(file: LoadedFile): Promise<LoadedFile | null>;
 }
 
 export function isGcodeName(name: string): boolean {
@@ -82,6 +86,42 @@ function pickFiles(directory: boolean): Promise<File[]> {
   });
 }
 
+async function writeNativeFile(path: string, text: string): Promise<LoadedFile> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<LoadedFile>('write_program_file', { path, text });
+}
+
+async function nativeSaveProgram(file: LoadedFile): Promise<LoadedFile> {
+  return writeNativeFile(file.path, file.text);
+}
+
+async function nativeSaveProgramAs(file: LoadedFile): Promise<LoadedFile | null> {
+  const { save } = await import('@tauri-apps/plugin-dialog');
+  const path = await save({
+    defaultPath: file.name,
+    filters: [{ name: 'G-code programs', extensions: GCODE_EXTENSIONS }],
+  });
+  if (typeof path !== 'string') return null;
+  return writeNativeFile(path, file.text);
+}
+
+/** Browser saves are downloads because file paths are not writable from the webview. */
+export function downloadText(name: string, text: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = name;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function browserSaveProgram(file: LoadedFile): Promise<LoadedFile> {
+  downloadText(file.name, file.text);
+  return file;
+}
+
 async function browserOpenProgram(): Promise<LoadedFile | null> {
   const [file] = await pickFiles(false);
   if (!file) return null;
@@ -106,12 +146,16 @@ const nativeIO: PlatformFileIO = {
   native: true,
   openProgram: nativeOpenProgram,
   openProject: nativeOpenProject,
+  saveProgram: nativeSaveProgram,
+  saveProgramAs: nativeSaveProgramAs,
 };
 
 const browserIO: PlatformFileIO = {
   native: false,
   openProgram: browserOpenProgram,
   openProject: browserOpenProject,
+  saveProgram: browserSaveProgram,
+  saveProgramAs: browserSaveProgram,
 };
 
 /** Native dialogs in Tauri; hidden file inputs when running in a browser. */
