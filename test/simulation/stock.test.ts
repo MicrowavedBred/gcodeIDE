@@ -32,6 +32,17 @@ function simulate(moves: Move[]): StockSimulation {
   );
 }
 
+function simulateWithTip(
+  moves: Move[],
+  toolTip: 'flat' | 'ball' | 'bull',
+  cornerRadiusMm = 0,
+): StockSimulation {
+  return simulateStock(
+    { moves, bounds: null, counts: { rapid: 0, linear: 0, arc: 0, cycle: 0 }, lengthsMm: { rapid: 0, linear: 0, arc: 0, cycle: 0, total: 0 } },
+    { ...config, toolTip, cornerRadiusMm },
+  );
+}
+
 describe('stock height map', () => {
   it('initialises the full stock volume and reports void outside it', () => {
     const simulation = simulate([]);
@@ -86,6 +97,55 @@ describe('stock height map', () => {
     const simulation = simulateStock(toolpath, config);
     expect(simulation.remainingVolumeMm3).toBeLessThan(2000);
     expect(simulation.heightAt(0, 0)).toBeCloseTo(-3, 3);
+  });
+});
+
+describe('tool tip geometry', () => {
+  const plunge = [linear({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: -2 })];
+
+  it('keeps a flat tool bottom across the full diameter', () => {
+    const simulation = simulateWithTip(plunge, 'flat');
+    expect(simulation.heightAt(0, 0)).toBeCloseTo(-2, 2);
+    expect(simulation.heightAt(1.5, 0)).toBeCloseTo(-2, 2);
+    expect(simulation.toolTip).toBe('flat');
+  });
+
+  it('leaves a spherical scallop with a ball nose', () => {
+    const simulation = simulateWithTip(plunge, 'ball');
+    const center = simulation.heightAt(0, 0)!;
+    const nearEdge = simulation.heightAt(1.5, 0)!;
+    expect(center).toBeLessThan(-1.9);
+    expect(nearEdge).toBeGreaterThan(center);
+    expect(simulation.remainingVolumeMm3).toBeGreaterThan(
+      simulateWithTip(plunge, 'flat').remainingVolumeMm3,
+    );
+  });
+
+  it('leaves a corner scallop with a bull nose between flat and ball', () => {
+    const bull = simulateWithTip(plunge, 'bull', 0.5);
+    const center = bull.heightAt(0, 0)!;
+    const coreEdge = bull.heightAt(1.25, 0)!;
+    const corner = bull.heightAt(1.8, 0)!;
+    expect(coreEdge).toBeCloseTo(center, 2);
+    expect(corner).toBeGreaterThan(coreEdge);
+    expect(bull.remainingVolumeMm3).toBeGreaterThan(
+      simulateWithTip(plunge, 'flat').remainingVolumeMm3,
+    );
+    expect(bull.remainingVolumeMm3).toBeLessThan(
+      simulateWithTip(plunge, 'ball').remainingVolumeMm3,
+    );
+    expect(bull.cornerRadiusMm).toBeCloseTo(0.5, 3);
+  });
+
+  it('clamps an oversized corner radius to half the tool diameter', () => {
+    const simulation = simulateWithTip(plunge, 'bull', 10);
+    const ball = simulateWithTip(plunge, 'ball');
+    expect(simulation.cornerRadiusMm).toBeCloseTo(2, 3);
+    expect(simulation.heightAt(1.5, 0)).toBeCloseTo(ball.heightAt(1.5, 0)!, 3);
+    expect(simulation.remainingVolumeMm3).toBeCloseTo(
+      ball.remainingVolumeMm3,
+      3,
+    );
   });
 });
 

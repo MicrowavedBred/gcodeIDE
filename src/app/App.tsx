@@ -20,6 +20,7 @@ import {
   serializeProjectFile,
 } from './project-file';
 import { buildSubprograms, mainFileFromFolder } from './program-set';
+import type { ToolTipShape } from '../core/simulation/stock';
 import { sampleProgram } from './sample-program';
 import {
   builtinFlavors,
@@ -68,6 +69,8 @@ export function App() {
   const [stockThickness, setStockThickness] = useState(20);
   const [stockTopZ, setStockTopZ] = useState(0);
   const [toolDiameter, setToolDiameter] = useState(6);
+  const [toolTip, setToolTip] = useState<ToolTipShape>('flat');
+  const [cornerRadius, setCornerRadius] = useState(0.5);
   const [safeZ, setSafeZ] = useState<number | null>(5);
   const [editorReady, setEditorReady] = useState(false);
   const [backplotReady, setBackplotReady] = useState(false);
@@ -105,9 +108,11 @@ export function App() {
               },
             },
             toolDiameterMm: Math.max(toolDiameter, 0.1),
+            toolTip,
+            cornerRadiusMm: cornerRadius,
           }
         : undefined,
-    [stockEnabled, stockX, stockY, stockThickness, stockTopZ, toolDiameter],
+    [stockEnabled, stockX, stockY, stockThickness, stockTopZ, toolDiameter, toolTip, cornerRadius],
   );
   const analysis = useMemo(
     () =>
@@ -545,6 +550,34 @@ export function App() {
               }
             />
           </label>
+          <label className="control">
+            <span>Tool tip</span>
+            <select
+              disabled={!stockEnabled}
+              value={toolTip}
+              onChange={(event) => setToolTip(event.target.value as ToolTipShape)}
+            >
+              <option value="flat">Flat</option>
+              <option value="ball">Ball nose</option>
+              <option value="bull">Bull nose</option>
+            </select>
+          </label>
+          {toolTip === 'bull' && (
+            <label className="control">
+              <span>Corner R (mm)</span>
+              <input
+                type="number"
+                min="0"
+                max={Math.max(toolDiameter, 0.1) / 2}
+                step="0.1"
+                disabled={!stockEnabled}
+                value={cornerRadius}
+                onChange={(event) =>
+                  setCornerRadius(readNumber(event.target.value, 0.5))
+                }
+              />
+            </label>
+          )}
           <label className="control">
             <span>Safe Z (mm)</span>
             <input

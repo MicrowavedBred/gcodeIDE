@@ -3,10 +3,16 @@ import type { StockBounds, Vec3 } from '../shared/types';
 import { pointsForMove } from '../interpreter/geometry';
 import type { Toolpath } from '../interpreter/toolpath';
 
+export type ToolTipShape = 'flat' | 'ball' | 'bull';
+
 /** Grid resolution applies to the longest stock axis; other axes scale to square cells. */
 export interface StockConfig {
   bounds: StockBounds;
   toolDiameterMm: number;
+  /** G-code Z is the lowest point of the tool. Defaults to a flat end mill. */
+  toolTip?: ToolTipShape;
+  /** Corner radius for bull-nose tools; clamped to half the tool diameter. */
+  cornerRadiusMm?: number;
   resolution?: number;
 }
 
@@ -18,6 +24,8 @@ export interface RapidPenetration {
 
 export interface StockSimulation {
   bounds: StockBounds;
+  toolTip: ToolTipShape;
+  cornerRadiusMm: number;
   columns: number;
   rows: number;
   cellWidthMm: number;
@@ -74,6 +82,30 @@ function resample(points: Vec3[], maxStepMm: number): Vec3[] {
   return sampled;
 }
 
+/**
+ * Bottom surface of the tool at a radial distance from its centre. The tip is
+ * the lowest point, so rounded tools leave material outside the centre.
+ */
+function toolSurfaceZ(
+  tipZ: number,
+  distance: number,
+  radius: number,
+  shape: ToolTipShape,
+  cornerRadius: number,
+): number {
+  if (shape === 'flat') return tipZ;
+  if (shape === 'ball') {
+    if (distance >= radius) return tipZ + radius;
+    return tipZ + radius - Math.sqrt(Math.max(0, radius ** 2 - distance ** 2));
+  }
+
+  const coreRadius = radius - cornerRadius;
+  if (distance <= coreRadius) return tipZ;
+  if (distance >= radius) return tipZ + cornerRadius;
+  const offset = distance - coreRadius;
+  return tipZ + cornerRadius - Math.sqrt(Math.max(0, cornerRadius ** 2 - offset ** 2));
+}
+
 /** Sweeps the canonical toolpath through a 2.5D stock height map. */
 export function simulateStock(
   toolpath: Toolpath,
@@ -94,6 +126,11 @@ export function simulateStock(
   const cellArea = cellWidthMm * cellHeightMm;
   const radius = Math.max(config.toolDiameterMm, 0.01) / 2;
   const radiusSquared = radius * radius;
+  const toolTip = config.toolTip ?? 'flat';
+  const cornerRadiusMm = Math.min(
+    radius,
+    Math.max(0, config.cornerRadiusMm ?? 0),
+  );
 
   const heights = new Float32Array(columns * rows).fill(bounds.max.z);
   let remainingVolumeMm3 = heights.length * cellArea * (bounds.max.z - bounds.min.z);
@@ -120,8 +157,7 @@ export function simulateStock(
   }
 
   function removeAt(x: number, y: number, z: number): void {
-    const target = Math.max(z, bounds.min.z);
-    if (target >= bounds.max.z) return;
+    if (z >= bounds.max.z) return;
 
     const firstColumn = Math.max(
       0,
@@ -144,11 +180,21 @@ export function simulateStock(
       const centerY = bounds.min.y + (row + 0.5) * cellHeightMm;
       for (let column = firstColumn; column <= lastColumn; column += 1) {
         const centerX = bounds.min.x + (column + 0.5) * cellWidthMm;
-        if (
-          (centerX - x) ** 2 + (centerY - y) ** 2 > radiusSquared
-        ) {
+        const distanceSquared = (centerX - x) ** 2 + (centerY - y) ** 2;
+        if (distanceSquared > radiusSquared) {
           continue;
         }
+        const target = Math.max(
+          bounds.min.z,
+          toolSurfaceZ(
+            z,
+            Math.sqrt(distanceSquared),
+            radius,
+            toolTip,
+            cornerRadiusMm,
+          ),
+        );
+        if (target >= bounds.max.z) continue;
         const index = row * columns + column;
         const top = heights[index];
         if (top <= target) continue;
@@ -182,6 +228,8 @@ export function simulateStock(
 
   return {
     bounds,
+    toolTip,
+    cornerRadiusMm,
     columns,
     rows,
     cellWidthMm,

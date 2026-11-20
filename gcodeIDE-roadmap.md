@@ -243,7 +243,7 @@ Proposed impact (pending confirmation):
 ## Next steps
 
 1. Expand negative corpus cases as more real-world programs become available.
-2. Consider finer tool geometry (ball/bull nose) and a simulation worker for large programs.
+2. Consider a simulation worker for large programs.
 
 ### Implementation status
 
@@ -262,7 +262,7 @@ Proposed impact (pending confirmation):
 | Save / dirty state | Save, Save as, Ctrl/Cmd+S, unsaved marker, and an unsaved-changes guard on open. Native writes go through a bounded Rust command; browser dev falls back to a text download. |
 | Project files | Versioned `.gcodeide` JSON stores flavor, variant, folder association, and a relative main-program path. Native open resolves the saved folder path; browser import reselects the folder. |
 | Canonical toolpath | `core/interpreter` derives ordered `Move[]`, sampled geometry, bounds, counts and travel lengths; the three.js backplot is a thin renderer. `R`-only arcs still draw as straight chords. |
-| Stock simulation | `core/simulation` sweeps a cylindrical tool through a 2.5D height map; toolbar configures stock size, top Z, tool diameter and safe Z. `rapid-through-stock` uses time-of-execution penetration evidence; `unsafe-z-clearance` activates from configured safe Z. Backplot draws the envelope and remaining-material surface. |
+| Stock simulation | `core/simulation` sweeps a tool through a 2.5D height map with flat, ball-nose, or bull-nose tips (G-code Z is the lowest tip point; corner radius clamped to half diameter). Toolbar configures stock size, top Z, tool diameter, tip shape, corner R and safe Z. `rapid-through-stock` uses time-of-execution penetration evidence; `unsafe-z-clearance` activates from configured safe Z. Backplot draws the envelope and remaining-material surface. |
 
 ---
 
