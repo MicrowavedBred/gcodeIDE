@@ -439,19 +439,26 @@ const unsafeZClearance: RuleDefinition = {
   check({ evaluation, safeZ }) {
     if (safeZ === undefined) return [];
     const diagnostics: Diagnostic[] = [];
+    let zEstablished = false;
 
     for (const blockState of evaluation.blockStates) {
       const codes = blockCodes(blockState.block);
       if (codes.includes('G53')) continue;
+      // The evaluator starts at Z0 as a placeholder. Do not judge a rapid
+      // against that value until the program commands a Z position.
+      if (blockState.block.words.some((word) => word.letter === 'Z')) {
+        zEstablished = true;
+      }
 
       for (const event of moveEvents(blockState)) {
+        if (!zEstablished) continue;
         if (event.move.kind !== 'rapid') continue;
         if (event.move.to.z >= safeZ) continue;
         diagnostics.push(
           diagnostic(
             'unsafe-z-clearance',
             'warning',
-            `Rapid down to Z${event.move.to.z} is below the safe height Z${safeZ}.`,
+            `Rapid ends at Z${event.move.to.z}, below the safe height Z${safeZ}.`,
             wordSpan(blockState.block, 'Z') ?? blockSpan(blockState.block),
           ),
         );

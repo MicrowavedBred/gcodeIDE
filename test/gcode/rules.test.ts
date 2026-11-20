@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { sampleProgram } from '../../src/app/sample-program';
 import { evaluateProgram } from '../../src/core/gcode/modal';
 import { parseProgram } from '../../src/core/gcode/parser';
 import { runRules } from '../../src/core/rules/engine';
@@ -222,6 +223,25 @@ describe('optional geometry rules', () => {
         safeZ: 5,
       }).map((diagnostic) => diagnostic.ruleId),
     ).toContain('unsafe-z-clearance');
+  });
+
+  it('ignores the placeholder Z until a Z word is commanded', () => {
+    const flaggedLines = (source: string) =>
+      analyze(source, brotherProfile(), { safeZ: 5 })
+        .filter((diagnostic) => diagnostic.ruleId === 'unsafe-z-clearance')
+        .map((diagnostic) => diagnostic.span.line);
+
+    expect(flaggedLines('G21 G90\nG00 X0 Y0\nM30')).toEqual([]);
+    expect(flaggedLines('G21 G90\nG00 X0 Y0 Z1\nM30')).toEqual([2]);
+    expect(flaggedLines('G21 G90\nG01 Z-2\nG00 X30 Y0\nM30')).toEqual([3]);
+    expect(flaggedLines('G21 G90\nG00 Z50\nG00 X30 Y0\nM30')).toEqual([]);
+  });
+
+  it('does not flag the sample program initial XY rapid', () => {
+    expect(
+      analyze(sampleProgram, brotherProfile(), { safeZ: 5 })
+        .filter((diagnostic) => diagnostic.ruleId === 'unsafe-z-clearance'),
+    ).toEqual([]);
   });
 
   it('flags rapids inside the stock envelope', () => {
