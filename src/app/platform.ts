@@ -1,5 +1,10 @@
+import { PROJECT_FILE_EXTENSION } from './project-file';
+
 export const GCODE_EXTENSIONS = ['nc', 'gcode', 'tap', 'cnc', 'txt'];
 const MAX_FOLDER_FILES = 400;
+const PROJECT_FILE_FILTERS = [
+  { name: 'gcodeIDE project', extensions: [PROJECT_FILE_EXTENSION] },
+];
 
 export interface LoadedFile {
   path: string;
@@ -17,10 +22,14 @@ export interface PlatformFileIO {
   readonly native: boolean;
   openProgram(): Promise<LoadedFile | null>;
   openProject(): Promise<LoadedFolder | null>;
+  /** Reopens a persisted folder path; browsers return null and prompt instead. */
+  openProjectFolderAt(path: string): Promise<LoadedFolder | null>;
   /** Writes back to an already resolved path; browser dev downloads instead. */
   saveProgram(file: LoadedFile): Promise<LoadedFile | null>;
   /** Always prompts for a destination (or downloads in the browser). */
   saveProgramAs(file: LoadedFile): Promise<LoadedFile | null>;
+  openProjectFile(): Promise<LoadedFile | null>;
+  saveProjectFile(name: string, text: string): Promise<LoadedFile | null>;
 }
 
 export function isGcodeName(name: string): boolean {
@@ -34,6 +43,11 @@ export function isGcodeName(name: string): boolean {
 
 function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+async function nativeOpenProjectFolderAt(path: string): Promise<LoadedFolder | null> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<LoadedFolder>('read_project_folder', { path });
 }
 
 async function nativeOpenProgram(): Promise<LoadedFile | null> {
@@ -60,7 +74,7 @@ async function nativeOpenProject(): Promise<LoadedFolder | null> {
   return invoke<LoadedFolder>('read_project_folder', { path });
 }
 
-function pickFiles(directory: boolean): Promise<File[]> {
+function pickFiles(directory: boolean, accept?: string): Promise<File[]> {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -69,7 +83,8 @@ function pickFiles(directory: boolean): Promise<File[]> {
       (input as HTMLInputElement & { webkitdirectory: boolean }).webkitdirectory =
         true;
     } else {
-      input.accept = GCODE_EXTENSIONS.map((extension) => `.${extension}`).join(',');
+      input.accept =
+        accept ?? GCODE_EXTENSIONS.map((extension) => `.${extension}`).join(',');
     }
     const cleanup = () => input.remove();
     input.addEventListener('change', () => {
@@ -105,6 +120,37 @@ async function nativeSaveProgramAs(file: LoadedFile): Promise<LoadedFile | null>
   return writeNativeFile(path, file.text);
 }
 
+function projectFileName(name: string): string {
+  return name.toLowerCase().endsWith(`.${PROJECT_FILE_EXTENSION}`)
+    ? name
+    : `${name}.${PROJECT_FILE_EXTENSION}`;
+}
+
+async function nativeOpenProjectFile(): Promise<LoadedFile | null> {
+  const { open } = await import('@tauri-apps/plugin-dialog');
+  const path = await open({
+    multiple: false,
+    directory: false,
+    filters: PROJECT_FILE_FILTERS,
+  });
+  if (typeof path !== 'string') return null;
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<LoadedFile>('read_program_file', { path });
+}
+
+async function nativeSaveProjectFile(
+  name: string,
+  text: string,
+): Promise<LoadedFile | null> {
+  const { save } = await import('@tauri-apps/plugin-dialog');
+  const path = await save({
+    defaultPath: projectFileName(name),
+    filters: PROJECT_FILE_FILTERS,
+  });
+  if (typeof path !== 'string') return null;
+  return writeNativeFile(path, text);
+}
+
 /** Browser saves are downloads because file paths are not writable from the webview. */
 export function downloadText(name: string, text: string): void {
   const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
@@ -128,6 +174,25 @@ async function browserOpenProgram(): Promise<LoadedFile | null> {
   return { path: file.name, name: file.name, text: await file.text() };
 }
 
+async function browserOpenProjectFile(): Promise<LoadedFile | null> {
+  const [file] = await pickFiles(false, `.${PROJECT_FILE_EXTENSION}`);
+  if (!file) return null;
+  return { path: file.name, name: file.name, text: await file.text() };
+}
+
+async function browserSaveProjectFile(
+  name: string,
+  text: string,
+): Promise<LoadedFile | null> {
+  const fileName = projectFileName(name);
+  downloadText(fileName, text);
+  return { path: fileName, name: fileName, text };
+}
+
+async function browserOpenProjectFolderAt(): Promise<LoadedFolder | null> {
+  return null;
+}
+
 async function browserOpenProject(): Promise<LoadedFolder | null> {
   const files = await pickFiles(true);
   const selected = files.filter((file) => isGcodeName(file.name)).slice(0, MAX_FOLDER_FILES);
@@ -146,16 +211,22 @@ const nativeIO: PlatformFileIO = {
   native: true,
   openProgram: nativeOpenProgram,
   openProject: nativeOpenProject,
+  openProjectFolderAt: nativeOpenProjectFolderAt,
   saveProgram: nativeSaveProgram,
   saveProgramAs: nativeSaveProgramAs,
+  openProjectFile: nativeOpenProjectFile,
+  saveProjectFile: nativeSaveProjectFile,
 };
 
 const browserIO: PlatformFileIO = {
   native: false,
   openProgram: browserOpenProgram,
   openProject: browserOpenProject,
+  openProjectFolderAt: browserOpenProjectFolderAt,
   saveProgram: browserSaveProgram,
   saveProgramAs: browserSaveProgram,
+  openProjectFile: browserOpenProjectFile,
+  saveProjectFile: browserSaveProjectFile,
 };
 
 /** Native dialogs in Tauri; hidden file inputs when running in a browser. */

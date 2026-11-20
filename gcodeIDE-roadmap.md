@@ -242,9 +242,8 @@ Proposed impact (pending confirmation):
 
 ## Next steps
 
-1. Add a project file format for persisting flavor, variant, and folder association.
-2. Expand negative corpus cases as more real-world programs become available.
-3. Consider finer tool geometry (ball/bull nose) and a simulation worker for large programs.
+1. Expand negative corpus cases as more real-world programs become available.
+2. Consider finer tool geometry (ball/bull nose) and a simulation worker for large programs.
 
 ### Implementation status
 
@@ -260,7 +259,8 @@ Proposed impact (pending confirmation):
 | Other flavors | Built-in Haas, Fanuc, GRBL, LinuxCNC + ten synthetic reference programs in `test/fixtures/programs/` with golden execution traces. Coverage includes arcs, cycles, offsets, cutter comp, macros, 4-axis positioning, and a GRBL negative path. |
 | Tauri shell / UI | Tauri 2 shell with Monaco editor, diagnostics panel, and three.js backplot. Native file/folder open via dialog plugin + Rust read commands; browser fallback for `pnpm dev`. |
 | Project loading | Opening a program reads it into Monaco; opening a folder loads G-code files as the main program plus external subprograms for `M98`/`M99` resolution. |
-| Save / dirty state | Save, Save as, Ctrl/Cmd+S, unsaved marker, and an unsaved-changes guard on open. Native writes go through a bounded Rust command; browser dev falls back to a text download. Project-file persistence is still pending. |
+| Save / dirty state | Save, Save as, Ctrl/Cmd+S, unsaved marker, and an unsaved-changes guard on open. Native writes go through a bounded Rust command; browser dev falls back to a text download. |
+| Project files | Versioned `.gcodeide` JSON stores flavor, variant, folder association, and a relative main-program path. Native open resolves the saved folder path; browser import reselects the folder. |
 | Canonical toolpath | `core/interpreter` derives ordered `Move[]`, sampled geometry, bounds, counts and travel lengths; the three.js backplot is a thin renderer. `R`-only arcs still draw as straight chords. |
 | Stock simulation | `core/simulation` sweeps a cylindrical tool through a 2.5D height map; toolbar configures stock size, top Z, tool diameter and safe Z. `rapid-through-stock` uses time-of-execution penetration evidence; `unsafe-z-clearance` activates from configured safe Z. Backplot draws the envelope and remaining-material surface. |
 

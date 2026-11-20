@@ -13,6 +13,12 @@ import {
   type LoadedFile,
   type LoadedFolder,
 } from './platform';
+import {
+  createProjectFile,
+  parseProjectFile,
+  resolveMainFile,
+  serializeProjectFile,
+} from './project-file';
 import { buildSubprograms, mainFileFromFolder } from './program-set';
 import { sampleProgram } from './sample-program';
 import {
@@ -313,8 +319,85 @@ export function App() {
     }
   }
 
+  async function doOpenProjectFile() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const file = await platformFileIO.openProjectFile();
+      if (!file) return;
+      const state = parseProjectFile(file.text);
+      const targetFlavor = builtinFlavorsById.get(state.flavorId);
+      if (!targetFlavor) throw new Error(`Unknown flavor: ${state.flavorId}.`);
+      if (!targetFlavor.variants.some((variant) => variant.id === state.variantId)) {
+        throw new Error(`Unknown machine variant: ${state.variantId}.`);
+      }
+
+      let folder: LoadedFolder | null = null;
+      if (state.folderPath && platformFileIO.native) {
+        try {
+          folder = await platformFileIO.openProjectFolderAt(state.folderPath);
+        } catch {
+          folder = null;
+        }
+      }
+      if (!folder) {
+        folder = await platformFileIO.openProject();
+        if (!folder) return;
+        if (state.folderName && folder.name !== state.folderName) {
+          setNotice(
+            `Project folder ${state.folderName} was not found; using ${folder.name}.`,
+          );
+        }
+      }
+      const main = resolveMainFile(folder, state.mainProgram);
+      if (!main) {
+        setNotice(`Could not find ${state.mainProgram} in ${folder.name}.`);
+        return;
+      }
+      setFlavorId(state.flavorId);
+      setVariantId(state.variantId);
+      setProject(folder);
+      loadFile(main);
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : 'Could not open the project file.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveProject() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const main: LoadedFile = currentFile ?? {
+        path: 'program.nc',
+        name: 'program.nc',
+        text,
+      };
+      const document = createProjectFile({
+        flavorId,
+        variantId,
+        folder: project,
+        main,
+      });
+      const baseName = main.name.replace(/\.[^.]+$/, '');
+      const name = project?.name ?? (baseName || 'project');
+      await platformFileIO.saveProjectFile(name, serializeProjectFile(document));
+      setNotice(null);
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : 'Could not save the project file.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const handleOpenProgram = () => requestOpen(() => void doOpenProgram());
   const handleOpenProject = () => requestOpen(() => void doOpenProject());
+  const handleOpenProjectFile = () => requestOpen(() => void doOpenProjectFile());
 
   return (
     <div className="app-shell">
@@ -336,6 +419,9 @@ export function App() {
           <button type="button" onClick={handleOpenProject} disabled={busy}>
             Open project folder…
           </button>
+          <button type="button" onClick={handleOpenProjectFile} disabled={busy}>
+            Open project file…
+          </button>
           <button
             type="button"
             onClick={() => void saveCurrent()}
@@ -350,6 +436,9 @@ export function App() {
             disabled={busy}
           >
             Save as…
+          </button>
+          <button type="button" onClick={() => void saveProject()} disabled={busy}>
+            Save project…
           </button>
         </div>
 
