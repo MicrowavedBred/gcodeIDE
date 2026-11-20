@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { analyzeProgram, collectMoves } from './analysis';
+import { analyzeProgram } from './analysis';
 import { createBackplot, type BackplotHandle } from './backplot';
 import {
   createGcodeEditor,
@@ -71,19 +71,7 @@ export function App() {
     () => analyzeProgram(text, fileName, profile!, subprograms),
     [text, fileName, profile, subprograms],
   );
-  const moves = useMemo(
-    () => collectMoves(analysis.evaluation),
-    [analysis],
-  );
-  const moveCounts = useMemo(
-    () => ({
-      rapid: moves.filter((move) => move.kind === 'rapid').length,
-      linear: moves.filter((move) => move.kind === 'linear').length,
-      arc: moves.filter((move) => move.kind === 'arc').length,
-      cycle: moves.filter((move) => move.kind === 'canned-cycle').length,
-    }),
-    [moves],
-  );
+  const toolpath = analysis.toolpath;
 
   useEffect(() => {
     const host = editorHostRef.current;
@@ -126,8 +114,8 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (backplotReady) backplotRef.current?.setMoves(moves);
-  }, [moves, backplotReady]);
+    if (backplotReady) backplotRef.current?.setToolpath(toolpath);
+  }, [toolpath, backplotReady]);
 
   const counts = useMemo(() => {
     const result: Record<SeverityFilter, number> = {
@@ -291,19 +279,19 @@ export function App() {
             <div className="backplot-legend" aria-label="Toolpath legend">
               <span>
                 <i className="legend-swatch legend-swatch--rapid" aria-hidden="true" />
-                Rapid {moveCounts.rapid}
+                Rapid {toolpath.counts.rapid}
               </span>
               <span>
                 <i className="legend-swatch legend-swatch--linear" aria-hidden="true" />
-                Linear {moveCounts.linear}
+                Linear {toolpath.counts.linear}
               </span>
               <span>
                 <i className="legend-swatch legend-swatch--arc" aria-hidden="true" />
-                Arc {moveCounts.arc}
+                Arc {toolpath.counts.arc}
               </span>
               <span>
                 <i className="legend-swatch legend-swatch--cycle" aria-hidden="true" />
-                Cycle {moveCounts.cycle}
+                Cycle {toolpath.counts.cycle}
               </span>
             </div>
           </div>
@@ -313,7 +301,7 @@ export function App() {
               Backplot unavailable: {backplotError}
             </div>
           )}
-          {!backplotError && moves.length === 0 && (
+          {!backplotError && toolpath.moves.length === 0 && (
             <div className="backplot-overlay" role="status">
               No toolpath moves in this program.
             </div>
@@ -385,6 +373,7 @@ export function App() {
 
       <footer className="status-bar">
         <span>{analysis.program.blocks.length} blocks</span>
+        <span>Travel {toolpath.lengthsMm.total.toFixed(1)} mm</span>
         <span>
           {counts.all} diagnostics ({counts.error} errors)
         </span>

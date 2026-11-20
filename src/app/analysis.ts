@@ -1,9 +1,5 @@
-import {
-  evaluateProgram,
-  type Move,
-  type ProgramEvaluation,
-  type SemanticEvent,
-} from '../core/gcode/modal';
+import { evaluateProgram, type ProgramEvaluation } from '../core/gcode/modal';
+import { buildToolpath, type Toolpath } from '../core/interpreter/toolpath';
 import { parseProgram, type ParsedProgram } from '../core/gcode/parser';
 import type { ResolvedMachineProfile } from '../core/profiles/types';
 import { runRules } from '../core/rules/engine';
@@ -12,16 +8,8 @@ import type { Diagnostic } from '../core/shared/types';
 export interface ProgramAnalysis {
   program: ParsedProgram;
   evaluation: ProgramEvaluation;
+  toolpath: Toolpath;
   diagnostics: Diagnostic[];
-}
-
-export type MoveEvent = Extract<SemanticEvent, { kind: 'move' }>;
-
-/** Flattens evaluated move events for the backplot. */
-export function collectMoves(evaluation: ProgramEvaluation): Move[] {
-  return evaluation.events
-    .filter((event): event is MoveEvent => event.kind === 'move')
-    .map((event) => event.move);
 }
 
 function diagnosticKey(diagnostic: Diagnostic): string {
@@ -55,5 +43,5 @@ export function analyzeProgram(
       a.ruleId.localeCompare(b.ruleId),
   );
 
-  return { program, evaluation, diagnostics };
+  return { program, evaluation, toolpath: buildToolpath(evaluation), diagnostics };
 }

@@ -1,8 +1,10 @@
 import * as THREE from 'three';
-import type { Move, Plane } from '../core/gcode/modal';
+import { pointsForMove, type Bounds } from '../core/interpreter/geometry';
+import type { Move } from '../core/gcode/modal';
+import type { Toolpath } from '../core/interpreter/toolpath';
 
 export interface BackplotHandle {
-  setMoves(moves: Move[]): void;
+  setToolpath(toolpath: Toolpath): void;
   dispose(): void;
 }
 
@@ -12,88 +14,6 @@ const colors = {
   arc: 0x8ab4f8,
   cycle: 0xd6c17a,
 };
-
-const planeAxes: Record<Plane, { u: 'x' | 'y' | 'z'; v: 'x' | 'y' | 'z'; fixed: 'x' | 'y' | 'z' }> = {
-  XY: { u: 'x', v: 'y', fixed: 'z' },
-  ZX: { u: 'z', v: 'x', fixed: 'y' },
-  YZ: { u: 'y', v: 'z', fixed: 'x' },
-};
-
-function vector(pose: { x: number; y: number; z: number }): THREE.Vector3 {
-  return new THREE.Vector3(pose.x, pose.y, pose.z);
-}
-
-function arcPoints(move: Extract<Move, { kind: 'arc' }>): THREE.Vector3[] {
-  const points = [vector(move.from)];
-  if (!move.center) {
-    points.push(vector(move.to));
-    return points;
-  }
-
-  const axes = planeAxes[move.plane];
-  const [cu, cv] = move.center;
-  const startU = move.from[axes.u] - cu;
-  const startV = move.from[axes.v] - cv;
-  const radius = Math.hypot(startU, startV);
-  if (radius < 1e-6) {
-    points.push(vector(move.to));
-    return points;
-  }
-
-  const startAngle = Math.atan2(startV, startU);
-  const endAngle = Math.atan2(
-    move.to[axes.v] - cv,
-    move.to[axes.u] - cu,
-  );
-  let sweep = endAngle - startAngle;
-  if (move.clockwise) {
-    while (sweep >= 0) sweep -= Math.PI * 2;
-  } else {
-    while (sweep <= 0) sweep += Math.PI * 2;
-  }
-
-  const steps = Math.max(8, Math.ceil(Math.abs(sweep) / (Math.PI / 24)));
-  for (let step = 1; step <= steps; step += 1) {
-    const fraction = step / steps;
-    const angle = startAngle + sweep * fraction;
-    const point = vector(move.from);
-    point[axes.u] = cu + radius * Math.cos(angle);
-    point[axes.v] = cv + radius * Math.sin(angle);
-    point[axes.fixed] = THREE.MathUtils.lerp(
-      move.from[axes.fixed],
-      move.to[axes.fixed],
-      fraction,
-    );
-    points.push(point);
-  }
-  return points;
-}
-
-function cyclePoints(
-  move: Extract<Move, { kind: 'canned-cycle' }>,
-): THREE.Vector3[] {
-  const top = move.from.z;
-  const bottom = move.z ?? move.at.z;
-  const retract = move.r ?? top;
-  return [
-    new THREE.Vector3(move.at.x, move.at.y, retract),
-    new THREE.Vector3(move.at.x, move.at.y, bottom),
-    new THREE.Vector3(move.at.x, move.at.y, retract),
-    new THREE.Vector3(move.at.x, move.at.y, top),
-  ];
-}
-
-function pointsForMove(move: Move): THREE.Vector3[] {
-  switch (move.kind) {
-    case 'rapid':
-    case 'linear':
-      return [vector(move.from), vector(move.to)];
-    case 'arc':
-      return arcPoints(move);
-    case 'canned-cycle':
-      return cyclePoints(move);
-  }
-}
 
 function colorForMove(move: Move): number {
   switch (move.kind) {
@@ -108,19 +28,21 @@ function colorForMove(move: Move): number {
   }
 }
 
-function buildToolpath(moves: Move[]): THREE.Group {
+function buildLines(toolpath: Toolpath): THREE.Group {
   const group = new THREE.Group();
-  for (const move of moves) {
+  for (const move of toolpath.moves) {
     const points = pointsForMove(move);
     if (points.length < 2) continue;
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const geometry = new THREE.BufferGeometry().setFromPoints(
+      points.map((point) => new THREE.Vector3(point.x, point.y, point.z)),
+    );
     const material = new THREE.LineBasicMaterial({ color: colorForMove(move) });
     group.add(new THREE.Line(geometry, material));
   }
   return group;
 }
 
-function disposeToolpath(group: THREE.Group): void {
+function disposeLines(group: THREE.Group): void {
   group.traverse((object) => {
     if (!(object instanceof THREE.Line)) return;
     object.geometry.dispose();
@@ -154,7 +76,7 @@ export function createBackplot(container: HTMLElement): BackplotHandle {
 
   const viewCenter = new THREE.Vector3();
   let viewSize = 100;
-  let toolpath: THREE.Group | null = null;
+  let lines: THREE.Group | null = null;
 
   function applyCamera(): void {
     const width = Math.max(1, container.clientWidth);
@@ -181,38 +103,45 @@ export function createBackplot(container: HTMLElement): BackplotHandle {
     renderer.render(scene, camera);
   }
 
+  function applyBounds(bounds: Bounds | null): void {
+    if (!bounds) {
+      viewCenter.set(0, 0, 0);
+      viewSize = 100;
+      return;
+    }
+    viewCenter.set(
+      (bounds.min.x + bounds.max.x) / 2,
+      (bounds.min.y + bounds.max.y) / 2,
+      (bounds.min.z + bounds.max.z) / 2,
+    );
+    const extent = Math.max(
+      bounds.max.x - bounds.min.x,
+      bounds.max.y - bounds.min.y,
+      bounds.max.z - bounds.min.z,
+    );
+    viewSize = Math.max(extent, 20) * 1.4;
+  }
+
   const observer = new ResizeObserver(applyCamera);
   observer.observe(container);
   applyCamera();
 
   return {
-    setMoves(moves) {
-      if (toolpath) {
-        scene.remove(toolpath);
-        disposeToolpath(toolpath);
+    setToolpath(toolpath) {
+      if (lines) {
+        scene.remove(lines);
+        disposeLines(lines);
       }
-      toolpath = buildToolpath(moves);
-      scene.add(toolpath);
-
-      const bounds = new THREE.Box3();
-      for (const move of moves) {
-        for (const point of pointsForMove(move)) bounds.expandByPoint(point);
-      }
-      if (bounds.isEmpty()) {
-        viewCenter.set(0, 0, 0);
-        viewSize = 100;
-      } else {
-        bounds.getCenter(viewCenter);
-        const extent = bounds.getSize(new THREE.Vector3());
-        viewSize = Math.max(extent.x, extent.y, extent.z, 20) * 1.4;
-      }
+      lines = buildLines(toolpath);
+      scene.add(lines);
+      applyBounds(toolpath.bounds);
       applyCamera();
     },
     dispose() {
       observer.disconnect();
-      if (toolpath) {
-        scene.remove(toolpath);
-        disposeToolpath(toolpath);
+      if (lines) {
+        scene.remove(lines);
+        disposeLines(lines);
       }
       grid.geometry.dispose();
       for (const material of Array.isArray(grid.material)

@@ -242,10 +242,9 @@ Proposed impact (pending confirmation):
 
 ## Next steps
 
-1. Refactor move emission into the canonical `Move[]` interpreter output under `core/interpreter` and feed the backplot from it.
-2. Add stock height-map simulation and the two geometry-dependent rules (`rapid-through-stock`, `unsafe-z-clearance`) end-to-end.
-3. Expand reference programs for each flavor (arcs, cycles, offsets, macros) as negative corpus cases are added.
-4. Add save / dirty-state handling and a project file format for persisting flavor, variant, and folder association.
+1. Add stock height-map simulation and the two geometry-dependent rules (`rapid-through-stock`, `unsafe-z-clearance`) end-to-end.
+2. Expand reference programs for each flavor (arcs, cycles, offsets, macros) as negative corpus cases are added.
+3. Add save / dirty-state handling and a project file format for persisting flavor, variant, and folder association.
 
 ### Implementation status
 
@@ -261,6 +260,7 @@ Proposed impact (pending confirmation):
 | Other flavors | Built-in Haas, Fanuc, GRBL, LinuxCNC + reference programs in `test/fixtures/programs/`. |
 | Tauri shell / UI | Tauri 2 shell with Monaco editor, diagnostics panel, and three.js backplot. Native file/folder open via dialog plugin + Rust read commands; browser fallback for `pnpm dev`. |
 | Project loading | Opening a program reads it into Monaco; opening a folder loads G-code files as the main program plus external subprograms for `M98`/`M99` resolution. Save/dirty state pending. |
+| Canonical toolpath | `core/interpreter` derives ordered `Move[]`, sampled geometry, bounds, counts and travel lengths; the three.js backplot is a thin renderer. `R`-only arcs still draw as straight chords. |
 
 ---
 

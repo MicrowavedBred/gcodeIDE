@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeProgram, collectMoves } from '../../src/app/analysis';
+import { analyzeProgram } from '../../src/app/analysis';
 import { grblProfile } from '../../src/core/profiles/builtin';
 
 describe('analyzeProgram', () => {
@@ -32,7 +32,7 @@ describe('analyzeProgram', () => {
       'moves.nc',
       grblProfile(),
     );
-    const moves = collectMoves(result.evaluation);
+    const moves = result.toolpath.moves;
     expect(moves.map((move) => move.kind)).toEqual([
       'rapid',
       'linear',
