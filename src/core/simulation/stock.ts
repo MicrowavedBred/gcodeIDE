@@ -40,6 +40,52 @@ export interface StockSimulation {
   heightAt(x: number, y: number): number | null;
 }
 
+/** Structured-clone-safe form returned by the simulation worker. */
+export interface SerializedStockSimulation {
+  bounds: StockBounds;
+  toolTip: ToolTipShape;
+  cornerRadiusMm: number;
+  columns: number;
+  rows: number;
+  cellWidthMm: number;
+  cellHeightMm: number;
+  heights: Float32Array;
+  initialVolumeMm3: number;
+  remainingVolumeMm3: number;
+  /** Rapid penetrations keyed by the index of the move in the simulated list. */
+  penetrations: Array<{ moveIndex: number; depthMm: number; at: Vec3 }>;
+}
+
+type StockGrid = Pick<
+  StockSimulation,
+  'bounds' | 'columns' | 'rows' | 'cellWidthMm' | 'cellHeightMm' | 'heights'
+>;
+
+/** Builds the height lookup for a grid; shared by simulation and worker restore. */
+export function makeHeightAt(grid: StockGrid): (x: number, y: number) => number | null {
+  const { bounds, columns, rows, cellWidthMm, cellHeightMm, heights } = grid;
+  return function heightAt(x: number, y: number): number | null {
+    if (
+      x < bounds.min.x ||
+      x > bounds.max.x ||
+      y < bounds.min.y ||
+      y > bounds.max.y
+    ) {
+      return null;
+    }
+    const column = Math.min(
+      columns - 1,
+      Math.max(0, Math.floor((x - bounds.min.x) / cellWidthMm)),
+    );
+    const row = Math.min(
+      rows - 1,
+      Math.max(0, Math.floor((y - bounds.min.y) / cellHeightMm)),
+    );
+    const height = heights[row * columns + column];
+    return height > bounds.min.z + 1e-6 ? height : null;
+  };
+}
+
 const MAX_GRID_RESOLUTION = 320;
 const MIN_GRID_RESOLUTION = 16;
 const PENETRATION_TOLERANCE_MM = 0.01;
@@ -108,7 +154,7 @@ function toolSurfaceZ(
 
 /** Sweeps the canonical toolpath through a 2.5D stock height map. */
 export function simulateStock(
-  toolpath: Toolpath,
+  toolpath: Pick<Toolpath, 'moves'>,
   config: StockConfig,
 ): StockSimulation {
   const { bounds } = config;
@@ -133,28 +179,15 @@ export function simulateStock(
   );
 
   const heights = new Float32Array(columns * rows).fill(bounds.max.z);
+  const heightAt = makeHeightAt({
+    bounds,
+    columns,
+    rows,
+    cellWidthMm,
+    cellHeightMm,
+    heights,
+  });
   let remainingVolumeMm3 = heights.length * cellArea * (bounds.max.z - bounds.min.z);
-
-  function heightAt(x: number, y: number): number | null {
-    if (
-      x < bounds.min.x ||
-      x > bounds.max.x ||
-      y < bounds.min.y ||
-      y > bounds.max.y
-    ) {
-      return null;
-    }
-    const column = Math.min(
-      columns - 1,
-      Math.max(0, Math.floor((x - bounds.min.x) / cellWidthMm)),
-    );
-    const row = Math.min(
-      rows - 1,
-      Math.max(0, Math.floor((y - bounds.min.y) / cellHeightMm)),
-    );
-    const height = heights[row * columns + column];
-    return height > bounds.min.z + 1e-6 ? height : null;
-  }
 
   function removeAt(x: number, y: number, z: number): void {
     if (z >= bounds.max.z) return;
@@ -239,5 +272,62 @@ export function simulateStock(
     remainingVolumeMm3: Math.max(0, remainingVolumeMm3),
     penetrationByMove,
     heightAt,
+  };
+}
+
+/** Converts move-identity keys to indices so the result can cross a worker boundary. */
+export function serializeStockSimulation(
+  simulation: StockSimulation,
+  moves: Move[],
+): SerializedStockSimulation {
+  const moveIndex = new Map<Move, number>(moves.map((move, index) => [move, index]));
+  const penetrations: SerializedStockSimulation['penetrations'] = [];
+  for (const [move, penetration] of simulation.penetrationByMove) {
+    const index = moveIndex.get(move);
+    if (index === undefined) continue;
+    penetrations.push({
+      moveIndex: index,
+      depthMm: penetration.depthMm,
+      at: penetration.at,
+    });
+  }
+  return {
+    bounds: simulation.bounds,
+    toolTip: simulation.toolTip,
+    cornerRadiusMm: simulation.cornerRadiusMm,
+    columns: simulation.columns,
+    rows: simulation.rows,
+    cellWidthMm: simulation.cellWidthMm,
+    cellHeightMm: simulation.cellHeightMm,
+    heights: simulation.heights,
+    initialVolumeMm3: simulation.initialVolumeMm3,
+    remainingVolumeMm3: simulation.remainingVolumeMm3,
+    penetrations,
+  };
+}
+
+/** Rebuilds move-identity keys and the height lookup on the receiving side. */
+export function restoreStockSimulation(
+  data: SerializedStockSimulation,
+  moves: Move[],
+): StockSimulation {
+  const penetrationByMove = new Map<Move, RapidPenetration>();
+  for (const { moveIndex, depthMm, at } of data.penetrations) {
+    const move = moves[moveIndex];
+    if (move) penetrationByMove.set(move, { depthMm, at });
+  }
+  return {
+    bounds: data.bounds,
+    toolTip: data.toolTip,
+    cornerRadiusMm: data.cornerRadiusMm,
+    columns: data.columns,
+    rows: data.rows,
+    cellWidthMm: data.cellWidthMm,
+    cellHeightMm: data.cellHeightMm,
+    heights: data.heights,
+    initialVolumeMm3: data.initialVolumeMm3,
+    remainingVolumeMm3: data.remainingVolumeMm3,
+    penetrationByMove,
+    heightAt: makeHeightAt(data),
   };
 }

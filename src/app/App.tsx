@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { analyzeProgram } from './analysis';
+import {
+  analyzeProgram,
+  type ProgramAnalysis,
+} from './analysis';
+import {
+  analyzeProgramAsync,
+  disposeAnalysisWorker,
+} from './analysis-worker-client';
 import { createBackplot, type BackplotHandle } from './backplot';
 import {
   createGcodeEditor,
@@ -114,14 +121,28 @@ export function App() {
         : undefined,
     [stockEnabled, stockX, stockY, stockThickness, stockTopZ, toolDiameter, toolTip, cornerRadius],
   );
-  const analysis = useMemo(
-    () =>
-      analyzeProgram(text, fileName, profile!, subprograms, {
-        stock: stockConfig,
-        safeZ: safeZ ?? undefined,
-      }),
-    [text, fileName, profile, subprograms, stockConfig, safeZ],
+  const [analysis, setAnalysis] = useState<ProgramAnalysis>(() =>
+    analyzeProgram(text, fileName, profile!, subprograms, {
+      stock: stockConfig,
+      safeZ: safeZ ?? undefined,
+    }),
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    void analyzeProgramAsync(text, fileName, profile!, subprograms, {
+      stock: stockConfig,
+      safeZ: safeZ ?? undefined,
+    }).then((next) => {
+      if (!cancelled) setAnalysis(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [text, fileName, profile, subprograms, stockConfig, safeZ]);
+
+  useEffect(() => () => disposeAnalysisWorker(), []);
+
   const toolpath = analysis.toolpath;
   const simulation = analysis.simulation;
   const dirty = text !== savedText;

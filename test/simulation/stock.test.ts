@@ -27,7 +27,7 @@ function linear(
 
 function simulate(moves: Move[]): StockSimulation {
   return simulateStock(
-    { moves, bounds: null, counts: { rapid: 0, linear: 0, arc: 0, cycle: 0 }, lengthsMm: { rapid: 0, linear: 0, arc: 0, cycle: 0, total: 0 } },
+    { moves },
     config,
   );
 }
@@ -38,7 +38,7 @@ function simulateWithTip(
   cornerRadiusMm = 0,
 ): StockSimulation {
   return simulateStock(
-    { moves, bounds: null, counts: { rapid: 0, linear: 0, arc: 0, cycle: 0 }, lengthsMm: { rapid: 0, linear: 0, arc: 0, cycle: 0, total: 0 } },
+    { moves },
     { ...config, toolTip, cornerRadiusMm },
   );
 }

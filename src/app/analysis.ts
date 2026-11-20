@@ -23,26 +23,41 @@ export interface ProgramAnalysis {
   diagnostics: Diagnostic[];
 }
 
+/** Parse/evaluate/toolpath results, independent of stock simulation and rules. */
+export interface AnalysisParts {
+  program: ParsedProgram;
+  evaluation: ProgramEvaluation;
+  toolpath: Toolpath;
+}
+
 function diagnosticKey(diagnostic: Diagnostic): string {
   const { file, line, column } = diagnostic.span;
   return `${diagnostic.ruleId}|${file}|${line}|${column}|${diagnostic.message}`;
 }
 
-/** Runs the full verification pipeline against an in-memory program. */
-export function analyzeProgram(
+/** Runs the source and toolpath stages of the verification pipeline. */
+export function buildAnalysisParts(
   text: string,
   file: string,
   profile: ResolvedMachineProfile,
   subprograms: ParsedProgram[] = [],
-  options: AnalysisOptions = {},
-): ProgramAnalysis {
+): AnalysisParts {
   const program = parseProgram(text, file);
   const evaluation = evaluateProgram(
     subprograms.length > 0 ? { main: program, subprograms } : program,
     profile,
   );
-  const toolpath = buildToolpath(evaluation);
-  const simulation = options.stock ? simulateStock(toolpath, options.stock) : null;
+  return { program, evaluation, toolpath: buildToolpath(evaluation) };
+}
+
+/** Runs stock-aware rules and assembles diagnostics from prepared parts. */
+export function finishAnalysis(
+  parts: AnalysisParts,
+  profile: ResolvedMachineProfile,
+  options: AnalysisOptions,
+  simulation: StockSimulation | null,
+): ProgramAnalysis {
+  const { program, evaluation, toolpath } = parts;
   const policyDiagnostics = runRules({
     profile,
     program,
@@ -65,4 +80,19 @@ export function analyzeProgram(
   );
 
   return { program, evaluation, toolpath, simulation, diagnostics };
+}
+
+/** Runs the full verification pipeline synchronously (tests and worker fallback). */
+export function analyzeProgram(
+  text: string,
+  file: string,
+  profile: ResolvedMachineProfile,
+  subprograms: ParsedProgram[] = [],
+  options: AnalysisOptions = {},
+): ProgramAnalysis {
+  const parts = buildAnalysisParts(text, file, profile, subprograms);
+  const simulation = options.stock
+    ? simulateStock(parts.toolpath, options.stock)
+    : null;
+  return finishAnalysis(parts, profile, options, simulation);
 }
