@@ -66,12 +66,14 @@ files
   → macro evaluator       (execution order, IF/GOTO, alarms, variables)
   → modal engine          (per-block modal state)
   → interpreter           (canonical moves, work offsets, tool state)
-  → rules engine          (diagnostics)
-  → simulation worker     (stock removal, cycle time, geometric checks)
+  → simulation            (stock removal, penetration evidence)
+  → rules engine          (diagnostics, stock-aware checks)
   → UI                    (diagnostics, backplot, report)
 ```
 
 Key point: the **interpreter output is the shared contract**. Diagnostics, backplot, cycle time, and later streaming safety all consume the same `Move[]` + `BlockState[]`. Do not let the editor or renderer re-parse G-code.
+
+**Implementation note (v1):** simulation runs synchronously in the analysis pipeline on the UI thread; moving it to a worker is deferred until larger programs make it necessary. Cycle-time estimation remains future work.
 
 ## Module responsibilities
 
@@ -80,7 +82,7 @@ Key point: the **interpreter output is the shared contract**. Diagnostics, backp
 | `core/shared` | Units, `SourceSpan`, `Diagnostic`, `Pose`, `Move`, `BlockState` types | Know about flavors, files, or UI. |
 | `core/gcode` | Lexing, parsing, AST, modal state transitions, code-word semantics | Resolve files, run macros, or render. |
 | `core/macros` | Restricted expression evaluation, `IF/GOTO`, `#3000`, variable store | Full macro language, I/O, or loops beyond the agreed subset. |
-| `core/interpreter` | Program control flow, subprogram stack, offsets (`G54.1`, `G10 L20`, `G52`, `G68`), tool state, move emission | UI concerns or diagnostic policy. |
+| `core/interpreter` | Program control flow, subprogram stack, offsets (`G54.1`, `G10 L20`, `G52`, `G68`), tool state, move emission, canonical toolpath sampling and bounds | UI concerns or diagnostic policy. |
 | `core/rules` | Rule interface, baseline rules, severity resolution, profile overrides | Mutate interpreter state. |
 | `core/profiles` | Flavor/variant/preference types, built-in definitions, resolution, validation, custom M-codes, system variables | Contain G-code parsing logic. |
 | `core/simulation` | Stock model, height-map removal, cycle-time estimation, geometric checks | Parse G-code or know about React. |

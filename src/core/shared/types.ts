@@ -26,3 +26,9 @@ export interface Vec3 {
 export interface Pose extends Vec3 {
   a?: number;
 }
+
+/** Axis-aligned stock envelope in work coordinates. */
+export interface StockBounds {
+  min: Vec3;
+  max: Vec3;
+}

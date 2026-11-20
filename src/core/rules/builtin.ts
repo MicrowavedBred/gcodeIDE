@@ -394,8 +394,8 @@ const rapidThroughStock: RuleDefinition = {
   id: 'rapid-through-stock',
   description: 'Rapid move passes through the stock envelope.',
   defaultSeverity: 'warning',
-  check({ evaluation, stock }) {
-    if (!stock) return [];
+  check({ evaluation, stock, stockSimulation }) {
+    if (!stock && !stockSimulation) return [];
     const diagnostics: Diagnostic[] = [];
 
     for (const blockState of evaluation.blockStates) {
@@ -407,14 +407,21 @@ const rapidThroughStock: RuleDefinition = {
       for (const event of moveEvents(blockState)) {
         if (event.move.kind !== 'rapid') continue;
         const { from, to } = event.move;
-        const inside = isInsideStock(to, stock) || isInsideStock(from, stock);
-        if (!inside) continue;
+        const penetration = stockSimulation?.penetrationByMove.get(event.move);
+        const coarseHit =
+          !stockSimulation &&
+          stock &&
+          (isInsideStock(to, stock) || isInsideStock(from, stock));
+        if (!penetration && !coarseHit) continue;
 
+        const message = penetration
+          ? `Rapid path passes up to ${penetration.depthMm.toFixed(1)} mm below remaining stock.`
+          : 'Rapid move starts or ends inside the stock envelope.';
         diagnostics.push(
           diagnostic(
             'rapid-through-stock',
             'warning',
-            'Rapid move starts or ends inside the stock envelope.',
+            message,
             wordSpan(blockState.block, 'G') ?? blockSpan(blockState.block),
           ),
         );

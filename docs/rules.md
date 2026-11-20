@@ -48,8 +48,9 @@ interface RuleContext {
   profile: ResolvedMachineProfile;
   program: ParsedProgram;
   evaluation: ProgramEvaluation;
-  stock?: StockBounds;  // required only by rapid-through-stock
-  safeZ?: number;       // required only by unsafe-z-clearance
+  stock?: StockBounds;                  // coarse fallback for rapid-through-stock
+  stockSimulation?: StockSimulation;    // height-map evidence, when configured
+  safeZ?: number;                       // unsafe-z-clearance threshold
 }
 ```
 
@@ -57,12 +58,12 @@ Rules are pure: they inspect the context and return diagnostics. They never muta
 
 ## Geometry-dependent rules
 
-Two baseline rules need data the modal engine does not produce yet:
+Both rules need configuration the modal engine does not produce:
 
-- `rapid-through-stock` runs only when a stock envelope is supplied. It skips `G53`/`G28`/`G30` blocks and flags rapids whose start or end point lies inside the stock box (coarse v1 check; segment intersection is a later refinement).
-- `unsafe-z-clearance` runs only when a safe Z height is supplied. It skips `G53` and flags rapids below the safe height.
+- `rapid-through-stock` skips `G53`/`G28`/`G30` blocks. With stock simulation enabled it flags a rapid whose sampled path passes below the material present **at that point in execution**, including crossings where both endpoints are outside the stock box. Callers that supply only a stock box keep the coarse endpoint-in-box check.
+- `unsafe-z-clearance` runs only when a safe Z height is supplied. It skips `G53` and flags rapids ending below the safe height. It is independent of the height map.
 
-They are inactive on programs without stock/clearance context rather than guessing.
+Both are inactive without their respective configuration rather than guessing. The height map models vertical cylindrical cutters only; ball-nose geometry, fixture collision, and rotary removal are out of scope.
 
 ## Rule-specific decisions
 

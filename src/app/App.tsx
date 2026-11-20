@@ -38,6 +38,11 @@ const severityLabels: Record<Exclude<Severity, 'off'>, string> = {
   info: 'Info',
 };
 
+function readNumber(value: string, fallback: number): number {
+  const parsed = Number(value);
+  return value.trim() === '' || !Number.isFinite(parsed) ? fallback : parsed;
+}
+
 export function App() {
   const [flavorId, setFlavorId] = useState(builtinFlavors[0].id);
   const [variantId, setVariantId] = useState(
@@ -49,6 +54,13 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [filter, setFilter] = useState<SeverityFilter>('all');
+  const [stockEnabled, setStockEnabled] = useState(false);
+  const [stockX, setStockX] = useState(100);
+  const [stockY, setStockY] = useState(100);
+  const [stockThickness, setStockThickness] = useState(20);
+  const [stockTopZ, setStockTopZ] = useState(0);
+  const [toolDiameter, setToolDiameter] = useState(6);
+  const [safeZ, setSafeZ] = useState<number | null>(5);
   const [editorReady, setEditorReady] = useState(false);
   const [backplotReady, setBackplotReady] = useState(false);
   const [backplotError, setBackplotError] = useState<string | null>(null);
@@ -67,11 +79,37 @@ export function App() {
     () => (project ? buildSubprograms(project, currentFile?.path) : []),
     [project, currentFile],
   );
+  const stockConfig = useMemo(
+    () =>
+      stockEnabled
+        ? {
+            bounds: {
+              min: {
+                x: -Math.max(stockX, 1) / 2,
+                y: -Math.max(stockY, 1) / 2,
+                z: stockTopZ - Math.max(stockThickness, 1),
+              },
+              max: {
+                x: Math.max(stockX, 1) / 2,
+                y: Math.max(stockY, 1) / 2,
+                z: stockTopZ,
+              },
+            },
+            toolDiameterMm: Math.max(toolDiameter, 0.1),
+          }
+        : undefined,
+    [stockEnabled, stockX, stockY, stockThickness, stockTopZ, toolDiameter],
+  );
   const analysis = useMemo(
-    () => analyzeProgram(text, fileName, profile!, subprograms),
-    [text, fileName, profile, subprograms],
+    () =>
+      analyzeProgram(text, fileName, profile!, subprograms, {
+        stock: stockConfig,
+        safeZ: safeZ ?? undefined,
+      }),
+    [text, fileName, profile, subprograms, stockConfig, safeZ],
   );
   const toolpath = analysis.toolpath;
+  const simulation = analysis.simulation;
 
   useEffect(() => {
     const host = editorHostRef.current;
@@ -116,6 +154,10 @@ export function App() {
   useEffect(() => {
     if (backplotReady) backplotRef.current?.setToolpath(toolpath);
   }, [toolpath, backplotReady]);
+
+  useEffect(() => {
+    if (backplotReady) backplotRef.current?.setStock(simulation);
+  }, [simulation, backplotReady]);
 
   const counts = useMemo(() => {
     const result: Record<SeverityFilter, number> = {
@@ -247,6 +289,91 @@ export function App() {
             {profile?.travels ? 'bounded travels' : 'unbounded travels'}
           </p>
         </div>
+
+        <div className="stock-controls">
+          <label className="toggle-control">
+            <input
+              type="checkbox"
+              checked={stockEnabled}
+              onChange={(event) => setStockEnabled(event.target.checked)}
+            />
+            Simulate stock
+          </label>
+
+          <label className="control">
+            <span>Stock X (mm)</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              disabled={!stockEnabled}
+              value={stockX}
+              onChange={(event) => setStockX(readNumber(event.target.value, 100))}
+            />
+          </label>
+          <label className="control">
+            <span>Stock Y (mm)</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              disabled={!stockEnabled}
+              value={stockY}
+              onChange={(event) => setStockY(readNumber(event.target.value, 100))}
+            />
+          </label>
+          <label className="control">
+            <span>Thickness (mm)</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              disabled={!stockEnabled}
+              value={stockThickness}
+              onChange={(event) =>
+                setStockThickness(readNumber(event.target.value, 20))
+              }
+            />
+          </label>
+          <label className="control">
+            <span>Top Z (mm)</span>
+            <input
+              type="number"
+              step="1"
+              disabled={!stockEnabled}
+              value={stockTopZ}
+              onChange={(event) => setStockTopZ(readNumber(event.target.value, 0))}
+            />
+          </label>
+          <label className="control">
+            <span>Tool Ø (mm)</span>
+            <input
+              type="number"
+              min="0.1"
+              step="0.5"
+              disabled={!stockEnabled}
+              value={toolDiameter}
+              onChange={(event) =>
+                setToolDiameter(readNumber(event.target.value, 6))
+              }
+            />
+          </label>
+          <label className="control">
+            <span>Safe Z (mm)</span>
+            <input
+              type="number"
+              step="1"
+              value={safeZ ?? ''}
+              onChange={(event) =>
+                setSafeZ(
+                  event.target.value.trim() === ''
+                    ? null
+                    : readNumber(event.target.value, 5),
+                )
+              }
+            />
+          </label>
+        </div>
       </header>
 
       <main className="workbench">
@@ -293,6 +420,12 @@ export function App() {
                 <i className="legend-swatch legend-swatch--cycle" aria-hidden="true" />
                 Cycle {toolpath.counts.cycle}
               </span>
+              {simulation && (
+                <span>
+                  <i className="legend-swatch legend-swatch--stock" aria-hidden="true" />
+                  Stock
+                </span>
+              )}
             </div>
           </div>
           <div className="backplot-host" ref={backplotHostRef} />
@@ -374,6 +507,18 @@ export function App() {
       <footer className="status-bar">
         <span>{analysis.program.blocks.length} blocks</span>
         <span>Travel {toolpath.lengthsMm.total.toFixed(1)} mm</span>
+        {simulation && (
+          <span>
+            Stock{' '}
+            {simulation.initialVolumeMm3 > 0
+              ? Math.round(
+                  (100 * simulation.remainingVolumeMm3) /
+                    simulation.initialVolumeMm3,
+                )
+              : 0}
+            % remaining
+          </span>
+        )}
         <span>
           {counts.all} diagnostics ({counts.error} errors)
         </span>

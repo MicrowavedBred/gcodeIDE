@@ -2,19 +2,19 @@ import type { ParsedBlock, ParsedProgram } from '../gcode/parser';
 import type { ProgramEvaluation, SemanticEvent } from '../gcode/modal';
 import type { ResolvedMachineProfile } from '../profiles/types';
 import type { Diagnostic, Severity, SourceSpan, Vec3 } from '../shared/types';
+import type { StockBounds } from '../shared/types';
+import type { StockSimulation } from '../simulation/stock';
 
-/** Conservative axis-aligned stock envelope for rule checks. */
-export interface StockBounds {
-  min: Vec3;
-  max: Vec3;
-}
+export type { StockBounds } from '../shared/types';
 
 export interface RuleContext {
   profile: ResolvedMachineProfile;
   program: ParsedProgram;
   evaluation: ProgramEvaluation;
-  /** Optional stock envelope; rapid-through-stock only runs when present. */
+  /** Optional stock envelope; coarse fallback for rapid-through-stock. */
   stock?: StockBounds;
+  /** Ordered material-removal result; enables the height-map stock check. */
+  stockSimulation?: StockSimulation;
   /** Optional safe Z height in work coordinates. */
   safeZ?: number;
 }

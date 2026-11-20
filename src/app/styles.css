@@ -15,6 +15,7 @@
   --linear: #7fc8a0;
   --arc: #8ab4f8;
   --cycle: #d6c17a;
+  --stock: #5f8f70;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -64,6 +65,7 @@ button {
 
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
@@ -142,7 +144,8 @@ button {
   text-transform: uppercase;
 }
 
-.control select {
+.control select,
+.control input[type='number'] {
   min-width: 170px;
   padding: var(--space-2) var(--space-3);
   background: var(--surface-raised);
@@ -152,9 +155,37 @@ button {
   text-transform: none;
 }
 
+.control input[type='number'] {
+  min-width: 84px;
+}
+
+.control input:disabled {
+  opacity: 0.45;
+}
+
 .profile-meta {
   margin: 0 0 var(--space-2);
   color: var(--muted);
+  white-space: nowrap;
+}
+
+.stock-controls {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.toggle-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  color: var(--text);
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -286,6 +317,10 @@ button {
 
 .legend-swatch--cycle {
   background: var(--cycle);
+}
+
+.legend-swatch--stock {
+  background: var(--stock);
 }
 
 .backplot-overlay {
@@ -454,6 +489,10 @@ button {
 
   .controls {
     flex-wrap: wrap;
+  }
+
+  .stock-controls {
+    padding-top: var(--space-3);
   }
 
   .workbench {
