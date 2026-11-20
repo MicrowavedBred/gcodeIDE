@@ -214,6 +214,11 @@ describe('program-level rules', () => {
 });
 
 describe('optional geometry rules', () => {
+  const flaggedSafeZLines = (source: string) =>
+    analyze(source, brotherProfile(), { safeZ: 5 })
+      .filter((diagnostic) => diagnostic.ruleId === 'unsafe-z-clearance')
+      .map((diagnostic) => diagnostic.span.line);
+
   it('flags rapids below a configured safe Z', () => {
     expect(
       rules('G21 G90 G0 X0 Y0 Z50\nG0 Z1\nM30'),
@@ -226,15 +231,16 @@ describe('optional geometry rules', () => {
   });
 
   it('ignores the placeholder Z until a Z word is commanded', () => {
-    const flaggedLines = (source: string) =>
-      analyze(source, brotherProfile(), { safeZ: 5 })
-        .filter((diagnostic) => diagnostic.ruleId === 'unsafe-z-clearance')
-        .map((diagnostic) => diagnostic.span.line);
+    expect(flaggedSafeZLines('G21 G90\nG00 X0 Y0\nM30')).toEqual([]);
+    expect(flaggedSafeZLines('G21 G90\nG00 X0 Y0 Z1\nM30')).toEqual([2]);
+    expect(flaggedSafeZLines('G21 G90\nG01 Z-2\nG00 X30 Y0\nM30')).toEqual([3]);
+    expect(flaggedSafeZLines('G21 G90\nG00 Z50\nG00 X30 Y0\nM30')).toEqual([]);
+  });
 
-    expect(flaggedLines('G21 G90\nG00 X0 Y0\nM30')).toEqual([]);
-    expect(flaggedLines('G21 G90\nG00 X0 Y0 Z1\nM30')).toEqual([2]);
-    expect(flaggedLines('G21 G90\nG01 Z-2\nG00 X30 Y0\nM30')).toEqual([3]);
-    expect(flaggedLines('G21 G90\nG00 Z50\nG00 X30 Y0\nM30')).toEqual([]);
+  it('does not treat machine-reference Z words as an established Z', () => {
+    expect(flaggedSafeZLines('G21 G90\nG28 G91 Z0.\nG00 X0 Y0\nM30')).toEqual([]);
+    expect(flaggedSafeZLines('G21 G90\nG30 G91 Z0.\nG00 X0 Y0\nM30')).toEqual([]);
+    expect(flaggedSafeZLines('G21 G90\nG01 Z-2\nG00 X30 Y0\nM30')).toEqual([3]);
   });
 
   it('does not flag the sample program initial XY rapid', () => {

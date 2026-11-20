@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeProgram } from '../../src/app/analysis';
-import { grblProfile } from '../../src/core/profiles/builtin';
+import { parseProgram } from '../../src/core/gcode/parser';
+import { builtinProfile, grblProfile } from '../../src/core/profiles/builtin';
 
 describe('analyzeProgram', () => {
   it('merges modal and policy diagnostics without duplicates', () => {
@@ -24,6 +25,19 @@ describe('analyzeProgram', () => {
       grblProfile(),
     );
     expect(result.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+  });
+
+  it('ignores a subprogram machine-reference Z for safe-Z checks', () => {
+    const result = analyzeProgram(
+      'G21 G90\nT01 M98 P9\nG00 X0 Y0\nM30\n',
+      'main.nc',
+      builtinProfile('brother-speedio')!,
+      [parseProgram('O0009\nG28 G91 Z0.\nM99\n', 'O0009')],
+      { safeZ: 5 },
+    );
+    expect(
+      result.diagnostics.filter((d) => d.ruleId === 'unsafe-z-clearance'),
+    ).toEqual([]);
   });
 
   it('collects move events in execution order', () => {

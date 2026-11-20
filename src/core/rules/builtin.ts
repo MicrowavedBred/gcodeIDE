@@ -443,7 +443,15 @@ const unsafeZClearance: RuleDefinition = {
 
     for (const blockState of evaluation.blockStates) {
       const codes = blockCodes(blockState.block);
-      if (codes.includes('G53')) continue;
+      // Machine-reference moves use machine coordinates; they neither get
+      // checked nor establish a work-coordinate Z.
+      if (
+        codes.includes('G53') ||
+        codes.includes('G28') ||
+        codes.includes('G30')
+      ) {
+        continue;
+      }
       // The evaluator starts at Z0 as a placeholder. Do not judge a rapid
       // against that value until the program commands a Z position.
       if (blockState.block.words.some((word) => word.letter === 'Z')) {

@@ -61,7 +61,7 @@ Rules are pure: they inspect the context and return diagnostics. They never muta
 Both rules need configuration the modal engine does not produce:
 
 - `rapid-through-stock` skips `G53`/`G28`/`G30` blocks. With stock simulation enabled it flags a rapid whose sampled path passes below the material present **at that point in execution**, including crossings where both endpoints are outside the stock box. Callers that supply only a stock box keep the coarse endpoint-in-box check.
-- `unsafe-z-clearance` runs only when a safe Z height is supplied. It skips `G53` and flags rapids ending below the safe height, including XY-only rapids once Z has been established. It ignores rapids until an executed block commands a Z word, because the evaluator's initial Z0 is a placeholder rather than a commanded position. It is independent of the height map.
+- `unsafe-z-clearance` runs only when a safe Z height is supplied. It skips `G53`, `G28` and `G30` machine-reference blocks and flags rapids ending below the safe height, including XY-only rapids once Z has been established. It ignores rapids until an executed block commands a Z word outside those blocks, because the evaluator's initial Z0 is a placeholder rather than a commanded position; a `G28`/`G30` Z word does not establish a work-coordinate Z. It is independent of the height map.
 
 Both are inactive without their respective configuration rather than guessing. The height map supports flat, ball-nose and bull-nose tips; fixture collision and rotary removal are out of scope.
 
