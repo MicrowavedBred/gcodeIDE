@@ -242,7 +242,7 @@ Proposed impact (pending confirmation):
 
 ## Next steps
 
-1. Expand negative corpus cases as more real-world programs become available.
+1. Replace synthetic negative fixtures with real-world program cases as those become available.
 
 ### Implementation status
 
@@ -253,7 +253,7 @@ Proposed impact (pending confirmation):
 | Macro evaluator | `IF/GOTO` with forward label search, `#3000` alarms, unknown-variable approximation. |
 | Rules engine | 13 rule implementations + modal-owned diagnostics, severity overrides per flavor/variant. |
 | Brother flavor | Built-in; S700XD2 variant + unbounded `unspecified` default. |
-| Corpus tests | Golden executed-block and move counts for all 10 Brother files. |
+| Corpus tests | Golden executed-block and move counts for all 10 Brother files, plus 10 synthetic negative fixtures asserting exact diagnostics for every catalog rule id. |
 | Subprogram execution | `M98`/`M99` call stack, repeat counts, depth limit, `ProgramSet` file resolution. |
 | Other flavors | Built-in Haas, Fanuc, GRBL, LinuxCNC + ten synthetic reference programs in `test/fixtures/programs/` with golden execution traces. Coverage includes arcs, cycles, offsets, cutter comp, macros, 4-axis positioning, and a GRBL negative path. |
 | Tauri shell / UI | Tauri 2 shell with Monaco editor, diagnostics panel, and three.js backplot. Native file/folder open via dialog plugin + Rust read commands; browser fallback for `pnpm dev`. |
@@ -499,5 +499,15 @@ Built-in flavor seeds (sizeless by default):
 | `bad_z_clearance.nc` | `unsafe-z-clearance` | Z rapid below safe clearance. |
 | `bad_macro_unknown_var.nc` | `unknown-system-variable` | `IF[#9999 EQ 0] GOTO 10` with `#9999` unset. |
 | `bad_custom_mcode.nc` | `unknown-custom-mcode` | Vendor M-code absent from the active flavor registry. |
+| `negative_conflicting_modal.nc` | `conflicting-modal-group` | Two plane codes in one block. |
+| `negative_unsupported_g10.nc` | `unsupported-g10` | Unimplemented `G10 L1` data-setting form. |
+| `negative_invalid_rotation.nc` | `invalid-rotation-parameters` | `G68` without `R`. |
+| `negative_missing_motion_mode.nc` | `missing-motion-mode` | Axis words before any motion mode. |
+| `negative_motion_cancelled.nc` | `motion-cancelled` | Axis words after `G80`. |
+| `negative_invalid_macro_target.nc` | `invalid-macro-target` | `GOTO` with no target. |
+| `negative_missing_label.nc` | `missing-label` | `GOTO` to an undefined label. |
+| `negative_invalid_macro_condition.nc` | `invalid-macro-condition` | Unsupported comparison operator. |
+| `negative_macro_iteration_limit.nc` | `macro-iteration-limit`, `missing-program-end` | Self-referencing `GOTO` hits the jump cap before `M30`. |
+| `negative_missing_tool.nc` | `missing-tool` | `M06` without a requested `T` word. |
 
 Acceptance criteria map directly onto this corpus. Every new rule must add a corpus case.

@@ -119,18 +119,6 @@ export const ruleCatalog: RuleCatalogEntry[] = [
     owner: 'modal',
   },
   {
-    id: 'invalid-arc-parameters',
-    defaultSeverity: 'error',
-    description: 'Arc is missing endpoint or centre information.',
-    owner: 'modal',
-  },
-  {
-    id: 'invalid-cycle-parameters',
-    defaultSeverity: 'error',
-    description: 'Canned cycle is missing required parameters.',
-    owner: 'modal',
-  },
-  {
     id: 'invalid-rotation-parameters',
     defaultSeverity: 'error',
     description: 'G68 is missing X, Y or R.',

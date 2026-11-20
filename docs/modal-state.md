@@ -180,9 +180,9 @@ These came from evaluating all ten Brother files end-to-end (see `src/core/gcode
 
 Modal engine owns structural/semantic diagnostics:
 
-- `conflicting-modal-group`, `missing-axis-words`, `invalid-arc-parameters`, `invalid-cycle-parameters`
-- `unsupported-code`, `unknown-custom-mcode`, `unknown-system-variable`
-- `missing-motion-mode`, `macro-alarm`, `macro-iteration-limit`, `macro-condition-assumed`
+- `conflicting-modal-group`, `invalid-rotation-parameters`, `missing-motion-mode`, `missing-tool`
+- `unsupported-code`, `unknown-custom-mcode`, `unknown-system-variable`, `unsupported-macro`, `unsupported-g10`, `motion-cancelled`
+- `missing-label`, `invalid-macro-target`, `invalid-macro-condition`, `macro-alarm`, `macro-iteration-limit`, `macro-condition-assumed`, `missing-subprogram`, `subprogram-depth-exceeded`
 
 Rules engine owns policy/safety diagnostics:
 
