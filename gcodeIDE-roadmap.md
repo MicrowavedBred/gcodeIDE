@@ -1,6 +1,6 @@
 # CNC IDE Roadmap (working document)
 
-> Living document. Last updated: 2026-11-19.
+> Living document. Last updated: 2026-11-21.
 > Workspace: `/home/bread/Documents/Opencode/gcodeIDE`.
 > Targets: **Linux (primary dev) and Windows**. macOS explicitly out of scope.
 > This file is the single source of truth for scope and sequencing. Expand it as decisions are made.
@@ -242,7 +242,9 @@ Proposed impact (pending confirmation):
 
 ## Next steps
 
-1. Replace synthetic negative fixtures with real-world program cases as those become available.
+1. Finish the Phase 1 setup gaps: persisted user preferences, clone/edit profile UI, and custom M-code registry UI.
+2. Replace synthetic negative fixtures with real-world program cases as those become available.
+3. Start Phase 3 lathe flavors, diameter programming, U/W and G96/G97.
 
 ### Implementation status
 
@@ -263,6 +265,7 @@ Proposed impact (pending confirmation):
 | Canonical toolpath | `core/interpreter` derives ordered `Move[]`, sampled geometry, bounds, counts and travel lengths; the three.js backplot is a thin renderer. `R`-only arcs still draw as straight chords. |
 | Stock simulation | `core/simulation` sweeps a tool through a 2.5D height map with flat, ball-nose, or bull-nose tips (G-code Z is the lowest tip point; corner radius clamped to half diameter). Toolbar configures stock size, top Z, tool diameter, tip shape, corner R and safe Z. `rapid-through-stock` uses time-of-execution penetration evidence; `unsafe-z-clearance` activates from configured safe Z once a work-coordinate Z word has been commanded. Backplot draws the envelope and remaining-material surface. |
 | Simulation worker | Numeric stock simulation runs in a Vite-bundled Web Worker shared by browser and Tauri; parse/evaluate/rules stay on the UI thread. Penetrations cross by move index and the identity-keyed Map is rebuilt on receipt. Async analysis falls back to synchronous simulation; the UI ignores stale results. |
+| Cycle time / report | Pure core estimator turns canonical moves and dwell events into rapid/feed/cycle/dwell seconds using the variant rapid rate and modal feeds. Canned cycles are approximated from R plane, depth and peck Q; missing rates show as unavailable with reasons. UI shows a verification summary and produces a copyable or downloadable Markdown report. |
 
 ---
 

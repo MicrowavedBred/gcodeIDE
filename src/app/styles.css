@@ -432,6 +432,47 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+.verification-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.verification-summary b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-spacer {
+  flex: 1;
+}
+
+.summary-note {
+  color: var(--warning);
+}
+
+.summary-unavailable {
+  cursor: help;
+}
+
+.verification-summary button {
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.verification-summary button:hover {
+  border-color: var(--accent);
+}
+
 .diagnostic-list {
   flex: 1;
   min-height: 0;

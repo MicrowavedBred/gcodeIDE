@@ -103,6 +103,7 @@ export type Move =
       from: Pose;
       to: Pose;
       feed: number | null;
+      feedMode?: FeedMode;
       line: number;
     }
   | {
@@ -114,6 +115,7 @@ export type Move =
       center?: [number, number];
       radius?: number;
       feed: number | null;
+      feedMode?: FeedMode;
       line: number;
     }
   | {
@@ -126,6 +128,8 @@ export type Move =
       q?: number;
       p?: number;
       i?: number;
+      feed: number | null;
+      feedMode?: FeedMode;
       line: number;
     };
 
@@ -905,6 +909,7 @@ export function applyBlock(
         from: clonePose(next.position),
         to: clonePose(target),
         feed: next.feed,
+        feedMode: next.modal.feedMode,
         line: block.line,
       };
       events.push({ kind: 'move', move });
@@ -935,6 +940,8 @@ export function applyBlock(
             q: cycle.q,
             p: cycle.p,
             i: cycle.i,
+            feed: next.feed,
+            feedMode: next.modal.feedMode,
             line: block.line,
           },
         });
@@ -1003,6 +1010,7 @@ function buildArcMove(
     center,
     radius: r?.value !== undefined ? toMm(r.value, units) : undefined,
     feed: state.feed,
+    feedMode: state.modal.feedMode,
     line: block.line,
   };
 }

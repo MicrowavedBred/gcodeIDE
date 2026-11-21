@@ -27,7 +27,12 @@ import {
   serializeProjectFile,
 } from './project-file';
 import { buildSubprograms, mainFileFromFolder } from './program-set';
+import {
+  buildVerificationReport,
+  formatDuration,
+} from './verification-report';
 import type { ToolTipShape } from '../core/simulation/stock';
+import { estimateCycleTime } from '../core/simulation/cycle-time';
 import { sampleProgram } from './sample-program';
 import {
   builtinFlavors,
@@ -70,6 +75,7 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [filter, setFilter] = useState<SeverityFilter>('all');
+  const [reportNotice, setReportNotice] = useState<string | null>(null);
   const [stockEnabled, setStockEnabled] = useState(false);
   const [stockX, setStockX] = useState(100);
   const [stockY, setStockY] = useState(100);
@@ -146,6 +152,33 @@ export function App() {
   const toolpath = analysis.toolpath;
   const simulation = analysis.simulation;
   const dirty = text !== savedText;
+
+  const dwellSeconds = useMemo(
+    () =>
+      analysis.evaluation.events.reduce(
+        (sum, event) => sum + (event.kind === 'dwell' ? event.seconds : 0),
+        0,
+      ),
+    [analysis],
+  );
+  const cycleTime = useMemo(
+    () =>
+      estimateCycleTime(toolpath.moves, dwellSeconds, {
+        rapidRateMmPerMin: profile?.variant.geometry.rapidRate ?? null,
+      }),
+    [toolpath, dwellSeconds, profile],
+  );
+  const reportText = useMemo(
+    () =>
+      buildVerificationReport({
+        fileName,
+        flavorName: flavor.name,
+        variantName: profile?.variant.name ?? '',
+        analysis,
+        cycleTime,
+      }),
+    [fileName, flavor.name, profile, analysis, cycleTime],
+  );
 
   useEffect(() => {
     const host = editorHostRef.current;
@@ -244,6 +277,20 @@ export function App() {
         builtinFlavorsById.get(nextFlavorId)?.variants[0]?.id ??
         '',
     );
+  }
+
+  async function copyReport() {
+    try {
+      await navigator.clipboard.writeText(reportText);
+      setReportNotice('Report copied.');
+    } catch {
+      setReportNotice('Clipboard unavailable.');
+    }
+  }
+
+  async function downloadReport() {
+    const saved = await platformFileIO.saveReportFile(fileName, reportText);
+    if (saved) setReportNotice(`Saved ${saved.name}.`);
   }
 
   function loadFile(file: LoadedFile) {
@@ -730,6 +777,44 @@ export function App() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="verification-summary" aria-label="Verification summary">
+            <span>
+              <b>{analysis.program.blocks.length}</b> blocks
+            </span>
+            <span>
+              <b>{toolpath.moves.length}</b> moves
+            </span>
+            <span>
+              <b>{toolpath.lengthsMm.total.toFixed(1)}</b> mm travel
+            </span>
+            <span
+              title={cycleTime.reasons.join(' ')}
+              className={cycleTime.seconds === null ? 'summary-unavailable' : undefined}
+            >
+              <b>
+                {cycleTime.seconds === null
+                  ? 'Unavailable'
+                  : formatDuration(cycleTime.seconds)}
+              </b>{' '}
+              cycle time
+            </span>
+            {cycleTime.approximateCycles && (
+              <span className="summary-note">cycles approximated</span>
+            )}
+            <span className="summary-spacer" />
+            <button type="button" onClick={() => void copyReport()}>
+              Copy report
+            </button>
+            <button type="button" onClick={() => void downloadReport()}>
+              Save report…
+            </button>
+            {reportNotice && (
+              <span className="summary-note" role="status">
+                {reportNotice}
+              </span>
+            )}
           </div>
 
           <ul className="diagnostic-list">

@@ -73,7 +73,14 @@ files
 
 Key point: the **interpreter output is the shared contract**. Diagnostics, backplot, cycle time, and later streaming safety all consume the same `Move[]` + `BlockState[]`. Do not let the editor or renderer re-parse G-code.
 
-**Implementation note (v1):** simulation runs synchronously in the analysis pipeline on the UI thread; moving it to a worker is deferred until larger programs make it necessary. Cycle-time estimation remains future work.
+**Implementation note (v1):** numeric stock simulation runs in a Web Worker; cycle-time estimation is a cheap pure calculation on the UI thread. Both consume the canonical toolpath produced before them.
+
+### Cycle-time contract
+
+- `core/simulation/cycle-time.ts` consumes canonical moves, dwell seconds and a rapid rate in mm/min. Feed time uses each move's modal feed; the modal engine now records that feed on canned-cycle moves too.
+- Canned cycles are approximated from XY travel, R plane, Z depth, feed and peck Q. The report marks this as approximate.
+- A missing rapid rate, a missing move feed, or a G93/G95 feed mode makes the estimate unavailable with explicit reasons. No default rate is inferred from a variant's feed limit.
+- The UI summary and verification report present the same estimate and reasons.
 
 ## Module responsibilities
 
@@ -178,7 +185,7 @@ interface EvaluationResult {
 ## Threading
 
 - Parsing, macro evaluation, modal state, interpretation, and rules run on the main thread. Real programs are thousands of lines, not millions; this keeps diagnostics snappy and simple.
-- Stock removal and cycle-time estimation run in a Web Worker.
+- Stock removal runs in a Web Worker; cycle-time estimation stays on the UI thread.
 - Requests carry a monotonically increasing ID; stale results are discarded on new edits.
 - Re-evaluate on a short debounce (150–250 ms) initially; incremental parsing is a later optimization.
 

@@ -91,6 +91,7 @@ describe('modal state transitions', () => {
       expect(move.move.code).toBe('G81');
       expect(move.move.z).toBe(-5);
       expect(move.move.r).toBe(2);
+      expect(move.move.feed).toBe(100);
     }
   });
 

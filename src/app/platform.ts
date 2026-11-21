@@ -30,6 +30,8 @@ export interface PlatformFileIO {
   saveProgramAs(file: LoadedFile): Promise<LoadedFile | null>;
   openProjectFile(): Promise<LoadedFile | null>;
   saveProjectFile(name: string, text: string): Promise<LoadedFile | null>;
+  /** Saves a verification report as Markdown. */
+  saveReportFile(name: string, text: string): Promise<LoadedFile | null>;
 }
 
 export function isGcodeName(name: string): boolean {
@@ -126,6 +128,26 @@ function projectFileName(name: string): string {
     : `${name}.${PROJECT_FILE_EXTENSION}`;
 }
 
+function reportFileName(name: string): string {
+  const base = name.replace(/\.[^.]+$/, '');
+  return base.toLowerCase().endsWith('-report')
+    ? `${base}.md`
+    : `${base}-report.md`;
+}
+
+async function nativeSaveReportFile(
+  name: string,
+  text: string,
+): Promise<LoadedFile | null> {
+  const { save } = await import('@tauri-apps/plugin-dialog');
+  const path = await save({
+    defaultPath: reportFileName(name),
+    filters: [{ name: 'Verification report', extensions: ['md', 'txt'] }],
+  });
+  if (typeof path !== 'string') return null;
+  return writeNativeFile(path, text);
+}
+
 async function nativeOpenProjectFile(): Promise<LoadedFile | null> {
   const { open } = await import('@tauri-apps/plugin-dialog');
   const path = await open({
@@ -189,6 +211,15 @@ async function browserSaveProjectFile(
   return { path: fileName, name: fileName, text };
 }
 
+export async function browserSaveReportFile(
+  name: string,
+  text: string,
+): Promise<LoadedFile | null> {
+  const fileName = reportFileName(name);
+  downloadText(fileName, text);
+  return { path: fileName, name: fileName, text };
+}
+
 async function browserOpenProjectFolderAt(): Promise<LoadedFolder | null> {
   return null;
 }
@@ -216,6 +247,7 @@ const nativeIO: PlatformFileIO = {
   saveProgramAs: nativeSaveProgramAs,
   openProjectFile: nativeOpenProjectFile,
   saveProjectFile: nativeSaveProjectFile,
+  saveReportFile: nativeSaveReportFile,
 };
 
 const browserIO: PlatformFileIO = {
@@ -227,6 +259,7 @@ const browserIO: PlatformFileIO = {
   saveProgramAs: browserSaveProgram,
   openProjectFile: browserOpenProjectFile,
   saveProjectFile: browserSaveProjectFile,
+  saveReportFile: browserSaveReportFile,
 };
 
 /** Native dialogs in Tauri; hidden file inputs when running in a browser. */
