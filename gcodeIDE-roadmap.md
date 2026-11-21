@@ -29,6 +29,7 @@
 | 2026-11-19 | Brother, Haas, Fanuc equal priority | GRBL/LinuxCNC remain built-in but secondary. |
 | 2026-11-19 | 4-axis: parse + positional backplot | A-axis tracked, offsets applied, toolpath rotated; no rotary material removal in v1. |
 | 2026-11-19 | Constrained macro evaluator in MVP | `IF/GOTO`, `#3000` alarms, configurable system variables; unknown variables warn. |
+| 2026-11-21 | Preferences persist in one versioned app settings document | Native builds write to the Tauri app-config dir; browser dev uses localStorage. Loaded values are validated against current flavors/variants before use. |
 
 ---
 
@@ -235,14 +236,14 @@ Proposed impact (pending confirmation):
 - Whether other shops need additional macro constructs or system variables beyond the Brother subset.
 - Which concrete variants ship in each built-in flavor catalog (e.g. Haas VF-2/VF-3, Fanuc 0i-M generic, Brother Speedio S700XD2, GRBL 3018, LinuxCNC generic). Flavors themselves stay sizeless.
 - Stock shape/origin conventions per flavor and variant.
-- Whether user preferences live in a global settings file with per-project overrides (leaning that way).
+- Whether per-project preference overrides are needed on top of the global settings document.
 - Distribution/license model (deferred).
 
 ---
 
 ## Next steps
 
-1. Finish the Phase 1 setup gaps: persisted user preferences, clone/edit profile UI, and custom M-code registry UI.
+1. Finish the Phase 1 setup gaps: clone/edit profile UI and custom M-code registry UI.
 2. Replace synthetic negative fixtures with real-world program cases as those become available.
 3. Start Phase 3 lathe flavors, diameter programming, U/W and G96/G97.
 
@@ -262,6 +263,7 @@ Proposed impact (pending confirmation):
 | Project loading | Opening a program reads it into Monaco; opening a folder loads G-code files as the main program plus external subprograms for `M98`/`M99` resolution. |
 | Save / dirty state | Save, Save as, Ctrl/Cmd+S, unsaved marker, and an unsaved-changes guard on open. Native writes go through a bounded Rust command; browser dev falls back to a text download. |
 | Project files | Versioned `.gcodeide` JSON stores flavor, variant, folder association, and a relative main-program path. Native open resolves the saved folder path; browser import reselects the folder. |
+| User preferences | Versioned app settings document stores default units and per-flavor default variant. Native builds use the Tauri config dir via bounded commands; browser dev uses localStorage. Values are normalized against current flavors/variants on load, and the toolbar exposes default units plus a one-click default variant. |
 | Canonical toolpath | `core/interpreter` derives ordered `Move[]`, sampled geometry, bounds, counts and travel lengths; the three.js backplot is a thin renderer. `R`-only arcs still draw as straight chords. |
 | Stock simulation | `core/simulation` sweeps a tool through a 2.5D height map with flat, ball-nose, or bull-nose tips (G-code Z is the lowest tip point; corner radius clamped to half diameter). Toolbar configures stock size, top Z, tool diameter, tip shape, corner R and safe Z. `rapid-through-stock` uses time-of-execution penetration evidence; `unsafe-z-clearance` activates from configured safe Z once a work-coordinate Z word has been commanded. Backplot draws the envelope and remaining-material surface. |
 | Simulation worker | Numeric stock simulation runs in a Vite-bundled Web Worker shared by browser and Tauri; parse/evaluate/rules stay on the UI thread. Penetrations cross by move index and the identity-keyed Map is rebuilt on receipt. Async analysis falls back to synchronous simulation; the UI ignores stale results. |

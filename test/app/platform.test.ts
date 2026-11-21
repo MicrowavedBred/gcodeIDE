@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { browserSaveReportFile, downloadText } from '../../src/app/platform';
+import {
+  APP_SETTINGS_KEY,
+  browserLoadSettings,
+  browserSaveReportFile,
+  browserSaveSettings,
+  downloadText,
+} from '../../src/app/platform';
 
 describe('browser save fallback', () => {
   afterEach(() => {
@@ -58,5 +64,32 @@ describe('browser save fallback', () => {
     expect(anchor.download).toBe('part-report.md');
     expect(saved?.name).toBe('part-report.md');
     expect(saved?.text).toBe('# Verification report');
+  });
+});
+
+describe('browser settings fallback', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('round-trips the settings document', async () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => void values.set(key, value),
+    });
+
+    expect(await browserLoadSettings()).toBeNull();
+    await browserSaveSettings('{"version":1}');
+
+    expect(values.get(APP_SETTINGS_KEY)).toBe('{"version":1}');
+    expect(await browserLoadSettings()).toBe('{"version":1}');
+  });
+
+  it('degrades quietly when storage is unavailable', async () => {
+    vi.stubGlobal('localStorage', undefined);
+
+    expect(await browserLoadSettings()).toBeNull();
+    await expect(browserSaveSettings('{}')).resolves.toBeUndefined();
   });
 });

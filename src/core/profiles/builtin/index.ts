@@ -1,3 +1,4 @@
+import type { PreferencesCatalog } from '../preferences';
 import type { Flavor, ResolvedMachineProfile, UserPreferences } from '../types';
 import { brotherProfile, brotherSpeedioFlavor, defaultUserPreferences as brotherDefaults } from './brother';
 import { fanucMillFlavor, fanucProfile } from './fanuc';
@@ -34,6 +35,19 @@ export const builtinUserPreferences: UserPreferences = {
         flavor.variants[0].id,
     ]),
   ),
+};
+
+/** Valid choices for persisted preferences, derived from the shipped flavors. */
+export const builtinPreferencesCatalog: PreferencesCatalog = {
+  defaultUnits: builtinUserPreferences.defaultUnits,
+  flavors: builtinFlavors.map((flavor) => ({
+    id: flavor.id,
+    defaultVariantId:
+      builtinUserPreferences.defaultVariantByFlavor[flavor.id] ??
+      flavor.variants.find((variant) => variant.isUnspecified)?.id ??
+      flavor.variants[0].id,
+    variantIds: flavor.variants.map((variant) => variant.id),
+  })),
 };
 
 export function builtinProfile(

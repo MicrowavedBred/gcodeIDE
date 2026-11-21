@@ -193,7 +193,7 @@ interface EvaluationResult {
 
 - **Project folder**: `project.json` + `programs/` + `subprograms/`. Relative paths make subprogram resolution deterministic.
 - **Single-file open**: wrap the file in an ephemeral project rooted at its directory, so `M98` resolution still works.
-- **Preferences**: Tauri app-config directory; global defaults (units, per-flavor default variant), with per-project overrides if needed.
+- **Preferences**: one versioned app settings document holds global defaults (units, per-flavor default variant). Native builds resolve the Tauri app-config directory inside bounded Rust commands so the webview never supplies a path; browser dev uses localStorage. Loaded values are validated against the current flavor/variant catalog, so stale or unknown ids fall back to shipped defaults instead of resolving to a missing profile. Project files still carry their explicit flavor and variant.
 
 ## Testing strategy
 

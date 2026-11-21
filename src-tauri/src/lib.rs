@@ -1,4 +1,5 @@
 mod files;
+mod settings;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -7,7 +8,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             files::read_program_file,
             files::write_program_file,
-            files::read_project_folder
+            files::read_project_folder,
+            settings::load_app_settings,
+            settings::save_app_settings
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

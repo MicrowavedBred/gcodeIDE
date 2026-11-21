@@ -27,6 +27,7 @@ import {
   serializeProjectFile,
 } from './project-file';
 import { buildSubprograms, mainFileFromFolder } from './program-set';
+import { loadPreferences, savePreferences, variantForFlavor } from './preferences';
 import {
   buildVerificationReport,
   formatDuration,
@@ -37,9 +38,11 @@ import { sampleProgram } from './sample-program';
 import {
   builtinFlavors,
   builtinFlavorsById,
+  builtinPreferencesCatalog,
   builtinProfile,
-  builtinUserPreferences,
 } from '../core/profiles/builtin';
+import { normalizeUserPreferences } from '../core/profiles/preferences';
+import type { Units, UserPreferences } from '../core/profiles/types';
 import type { Severity } from '../core/shared/types';
 
 type SeverityFilter = 'all' | Exclude<Severity, 'off'>;
@@ -62,10 +65,18 @@ function readNumber(value: string, fallback: number): number {
   return value.trim() === '' || !Number.isFinite(parsed) ? fallback : parsed;
 }
 
+const initialFlavor = builtinFlavors[0];
+const initialPreferences = normalizeUserPreferences(
+  null,
+  builtinPreferencesCatalog,
+);
+
 export function App() {
-  const [flavorId, setFlavorId] = useState(builtinFlavors[0].id);
+  const [preferences, setPreferences] =
+    useState<UserPreferences>(initialPreferences);
+  const [flavorId, setFlavorId] = useState(initialFlavor.id);
   const [variantId, setVariantId] = useState(
-    builtinUserPreferences.defaultVariantByFlavor[builtinFlavors[0].id],
+    variantForFlavor(initialFlavor.id, initialFlavor, initialPreferences),
   );
   const [text, setText] = useState(sampleProgram);
   const [savedText, setSavedText] = useState(sampleProgram);
@@ -93,11 +104,12 @@ export function App() {
   const backplotHostRef = useRef<HTMLDivElement>(null);
   const backplotRef = useRef<BackplotHandle | null>(null);
   const pendingOpenRef = useRef<(() => void) | null>(null);
+  const flavorIdRef = useRef(flavorId);
 
   const flavor = builtinFlavorsById.get(flavorId) ?? builtinFlavors[0];
   const profile = useMemo(
-    () => builtinProfile(flavorId, variantId),
-    [flavorId, variantId],
+    () => builtinProfile(flavorId, variantId, preferences),
+    [flavorId, variantId, preferences],
   );
   const fileName = currentFile?.name ?? 'program.nc';
   const subprograms = useMemo(
@@ -148,6 +160,29 @@ export function App() {
   }, [text, fileName, profile, subprograms, stockConfig, safeZ]);
 
   useEffect(() => () => disposeAnalysisWorker(), []);
+
+  useEffect(() => {
+    flavorIdRef.current = flavorId;
+  }, [flavorId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadPreferences()
+      .then((loaded) => {
+        if (cancelled) return;
+        setPreferences(loaded);
+        setVariantId(
+          (current) =>
+            loaded.defaultVariantByFlavor[flavorIdRef.current] ?? current,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setNotice('Could not load saved preferences; using defaults.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const toolpath = analysis.toolpath;
   const simulation = analysis.simulation;
@@ -273,10 +308,30 @@ export function App() {
   function handleFlavorChange(nextFlavorId: string) {
     setFlavorId(nextFlavorId);
     setVariantId(
-      builtinUserPreferences.defaultVariantByFlavor[nextFlavorId] ??
-        builtinFlavorsById.get(nextFlavorId)?.variants[0]?.id ??
-        '',
+      variantForFlavor(
+        nextFlavorId,
+        builtinFlavorsById.get(nextFlavorId),
+        preferences,
+      ),
     );
+  }
+
+  function handleDefaultUnitsChange(nextUnits: Units) {
+    const next = { ...preferences, defaultUnits: nextUnits };
+    setPreferences(next);
+    void savePreferences(next).catch(() => setNotice('Could not save preferences.'));
+  }
+
+  function handleUseVariantAsDefault() {
+    const next: UserPreferences = {
+      ...preferences,
+      defaultVariantByFlavor: {
+        ...preferences.defaultVariantByFlavor,
+        [flavorId]: variantId,
+      },
+    };
+    setPreferences(next);
+    void savePreferences(next).catch(() => setNotice('Could not save preferences.'));
   }
 
   async function copyReport() {
@@ -543,6 +598,31 @@ export function App() {
               ))}
             </select>
           </label>
+
+          <label className="control">
+            <span>Default units</span>
+            <select
+              value={preferences.defaultUnits}
+              onChange={(event) =>
+                handleDefaultUnitsChange(event.target.value as Units)
+              }
+            >
+              <option value="mm">mm</option>
+              <option value="inch">inch</option>
+            </select>
+          </label>
+
+          <button
+            type="button"
+            className="default-variant-button"
+            onClick={handleUseVariantAsDefault}
+            disabled={preferences.defaultVariantByFlavor[flavorId] === variantId}
+            title="Remember this variant for the current flavor"
+          >
+            {preferences.defaultVariantByFlavor[flavorId] === variantId
+              ? 'Default variant'
+              : 'Use as default'}
+          </button>
 
           <p className="profile-meta">
             {profile?.units.toUpperCase()} · {profile?.orientation} ·{' '}

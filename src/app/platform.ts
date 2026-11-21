@@ -18,6 +18,15 @@ export interface LoadedFolder {
   files: LoadedFile[];
 }
 
+/** Browser key for the app settings document; native builds use the config dir. */
+export const APP_SETTINGS_KEY = 'gcodeide.settings.v1';
+
+export interface PlatformSettingsIO {
+  /** Returns the stored settings document, or null when nothing is saved yet. */
+  load(): Promise<string | null>;
+  save(text: string): Promise<void>;
+}
+
 export interface PlatformFileIO {
   readonly native: boolean;
   openProgram(): Promise<LoadedFile | null>;
@@ -264,3 +273,44 @@ const browserIO: PlatformFileIO = {
 
 /** Native dialogs in Tauri; hidden file inputs when running in a browser. */
 export const platformFileIO: PlatformFileIO = isTauri() ? nativeIO : browserIO;
+
+async function nativeLoadSettings(): Promise<string | null> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<string | null>('load_app_settings');
+}
+
+async function nativeSaveSettings(text: string): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('save_app_settings', { text });
+}
+
+export async function browserLoadSettings(): Promise<string | null> {
+  try {
+    return globalThis.localStorage?.getItem(APP_SETTINGS_KEY) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function browserSaveSettings(text: string): Promise<void> {
+  try {
+    globalThis.localStorage?.setItem(APP_SETTINGS_KEY, text);
+  } catch {
+    // Storage can be disabled; settings then remain session-only.
+  }
+}
+
+const nativeSettingsIO: PlatformSettingsIO = {
+  load: nativeLoadSettings,
+  save: nativeSaveSettings,
+};
+
+const browserSettingsIO: PlatformSettingsIO = {
+  load: browserLoadSettings,
+  save: browserSaveSettings,
+};
+
+/** Native settings live in the app config dir; browsers use localStorage. */
+export const platformSettings: PlatformSettingsIO = isTauri()
+  ? nativeSettingsIO
+  : browserSettingsIO;
