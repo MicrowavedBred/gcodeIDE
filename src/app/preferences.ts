@@ -1,49 +1,66 @@
-import { builtinPreferencesCatalog } from '../core/profiles/builtin';
-import { normalizeUserPreferences } from '../core/profiles/preferences';
-import type { Flavor, UserPreferences } from '../core/profiles/types';
+import {
+  builtinFlavors,
+  builtinFlavorsById,
+  builtinPreferencesCatalog,
+  builtinUserPreferences,
+} from '../core/profiles/builtin';
+import { normalizeCustomFlavors } from '../core/profiles/custom-flavors';
+import {
+  catalogFromFlavors,
+  normalizeUserPreferences,
+} from '../core/profiles/preferences';
+import type { Flavor, UserFlavor, UserPreferences } from '../core/profiles/types';
 import { platformSettings } from './platform';
 
-const SETTINGS_VERSION = 1;
+export const SETTINGS_VERSION = 2;
 
-interface AppSettings {
+export interface AppSettings {
   version: number;
   preferences: UserPreferences;
+  customFlavors: UserFlavor[];
 }
 
-function defaultPreferences(): UserPreferences {
-  return normalizeUserPreferences(null, builtinPreferencesCatalog);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** Loads the versioned settings document, falling back to shipped defaults. */
-export async function loadPreferences(): Promise<UserPreferences> {
+export function defaultSettings(): AppSettings {
+  return {
+    version: SETTINGS_VERSION,
+    preferences: normalizeUserPreferences(null, builtinPreferencesCatalog),
+    customFlavors: [],
+  };
+}
+
+/** Reads v1 or v2 settings and validates them against the current catalog. */
+export async function loadSettings(): Promise<AppSettings> {
   const text = await platformSettings.load();
   if (text) {
     try {
       const parsed: unknown = JSON.parse(text);
-      if (
-        typeof parsed === 'object' &&
-        parsed !== null &&
-        (parsed as AppSettings).version === SETTINGS_VERSION
-      ) {
-        return normalizeUserPreferences(
-          (parsed as AppSettings).preferences,
-          builtinPreferencesCatalog,
+      if (isRecord(parsed) && (parsed.version === 1 || parsed.version === 2)) {
+        const customFlavors = normalizeCustomFlavors(
+          parsed.customFlavors,
+          builtinFlavorsById,
         );
+        const catalog = catalogFromFlavors(
+          [...builtinFlavors, ...customFlavors],
+          builtinUserPreferences,
+        );
+        return {
+          version: SETTINGS_VERSION,
+          preferences: normalizeUserPreferences(parsed.preferences, catalog),
+          customFlavors,
+        };
       }
     } catch {
       // Malformed settings are discarded rather than trusted.
     }
   }
-  return defaultPreferences();
+  return defaultSettings();
 }
 
-export async function savePreferences(
-  preferences: UserPreferences,
-): Promise<void> {
-  const settings: AppSettings = {
-    version: SETTINGS_VERSION,
-    preferences,
-  };
+export async function saveSettings(settings: AppSettings): Promise<void> {
   await platformSettings.save(JSON.stringify(settings));
 }
 

@@ -153,10 +153,18 @@ export interface Flavor {
   metadata: EntityMetadata;
 }
 
+/** A persisted full copy of a built-in flavor, edited by the user. */
+export interface UserFlavor extends Flavor {
+  source: 'user';
+  baseFlavorId: string;
+}
+
 export interface MachineVariant {
   id: string;
   flavorId: string;
   name: string;
+  /** Set on user clones so validation can recover fields from the source variant. */
+  baseVariantId?: string;
   isUnspecified?: boolean;
   geometry: GeometrySettings;
   orientation: Orientation;

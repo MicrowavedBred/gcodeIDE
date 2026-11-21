@@ -1,4 +1,23 @@
-import type { Units, UserPreferences } from './types';
+import type { Flavor, Units, UserPreferences } from './types';
+
+/** Builds the validation catalog from the flavors available in this session. */
+export function catalogFromFlavors(
+  flavors: readonly Flavor[],
+  shippedDefaults: UserPreferences,
+): PreferencesCatalog {
+  return {
+    defaultUnits: shippedDefaults.defaultUnits,
+    flavors: flavors.map((flavor) => ({
+      id: flavor.id,
+      defaultVariantId:
+        shippedDefaults.defaultVariantByFlavor[flavor.id] ??
+        flavor.variants.find((variant) => variant.isUnspecified)?.id ??
+        flavor.variants[0]?.id ??
+        '',
+      variantIds: flavor.variants.map((variant) => variant.id),
+    })),
+  };
+}
 
 /** The flavor/variant choices that count as valid when loading saved preferences. */
 export interface PreferencesFlavorCatalog {

@@ -26,8 +26,15 @@ import {
   resolveMainFile,
   serializeProjectFile,
 } from './project-file';
+import { ProfileManager } from './profile-manager';
 import { buildSubprograms, mainFileFromFolder } from './program-set';
-import { loadPreferences, savePreferences, variantForFlavor } from './preferences';
+import {
+  loadSettings,
+  saveSettings,
+  SETTINGS_VERSION,
+  variantForFlavor,
+  type AppSettings,
+} from './preferences';
 import {
   buildVerificationReport,
   formatDuration,
@@ -37,12 +44,16 @@ import { estimateCycleTime } from '../core/simulation/cycle-time';
 import { sampleProgram } from './sample-program';
 import {
   builtinFlavors,
-  builtinFlavorsById,
   builtinPreferencesCatalog,
-  builtinProfile,
 } from '../core/profiles/builtin';
+import { cloneFlavor } from '../core/profiles/custom-flavors';
 import { normalizeUserPreferences } from '../core/profiles/preferences';
-import type { Units, UserPreferences } from '../core/profiles/types';
+import { findProfile } from '../core/profiles/registry';
+import type {
+  Units,
+  UserFlavor,
+  UserPreferences,
+} from '../core/profiles/types';
 import type { Severity } from '../core/shared/types';
 
 type SeverityFilter = 'all' | Exclude<Severity, 'off'>;
@@ -74,6 +85,8 @@ const initialPreferences = normalizeUserPreferences(
 export function App() {
   const [preferences, setPreferences] =
     useState<UserPreferences>(initialPreferences);
+  const [customFlavors, setCustomFlavors] = useState<UserFlavor[]>([]);
+  const [profileManagerOpen, setProfileManagerOpen] = useState(false);
   const [flavorId, setFlavorId] = useState(initialFlavor.id);
   const [variantId, setVariantId] = useState(
     variantForFlavor(initialFlavor.id, initialFlavor, initialPreferences),
@@ -106,10 +119,26 @@ export function App() {
   const pendingOpenRef = useRef<(() => void) | null>(null);
   const flavorIdRef = useRef(flavorId);
 
-  const flavor = builtinFlavorsById.get(flavorId) ?? builtinFlavors[0];
+  function persistSettings(patch: Partial<AppSettings>): Promise<void> {
+    return saveSettings({
+      version: SETTINGS_VERSION,
+      preferences: patch.preferences ?? preferences,
+      customFlavors: patch.customFlavors ?? customFlavors,
+    });
+  }
+
+  const allFlavors = useMemo(
+    () => [...builtinFlavors, ...customFlavors],
+    [customFlavors],
+  );
+  const allFlavorsById = useMemo(
+    () => new Map(allFlavors.map((item) => [item.id, item])),
+    [allFlavors],
+  );
+  const flavor = allFlavorsById.get(flavorId) ?? builtinFlavors[0];
   const profile = useMemo(
-    () => builtinProfile(flavorId, variantId, preferences),
-    [flavorId, variantId, preferences],
+    () => findProfile(allFlavors, flavorId, variantId, preferences),
+    [allFlavors, flavorId, variantId, preferences],
   );
   const fileName = currentFile?.name ?? 'program.nc';
   const subprograms = useMemo(
@@ -167,13 +196,15 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
-    void loadPreferences()
-      .then((loaded) => {
+    void loadSettings()
+      .then((settings) => {
         if (cancelled) return;
-        setPreferences(loaded);
+        setPreferences(settings.preferences);
+        setCustomFlavors(settings.customFlavors);
         setVariantId(
           (current) =>
-            loaded.defaultVariantByFlavor[flavorIdRef.current] ?? current,
+            settings.preferences.defaultVariantByFlavor[flavorIdRef.current] ??
+            current,
         );
       })
       .catch(() => {
@@ -308,18 +339,16 @@ export function App() {
   function handleFlavorChange(nextFlavorId: string) {
     setFlavorId(nextFlavorId);
     setVariantId(
-      variantForFlavor(
-        nextFlavorId,
-        builtinFlavorsById.get(nextFlavorId),
-        preferences,
-      ),
+      variantForFlavor(nextFlavorId, allFlavorsById.get(nextFlavorId), preferences),
     );
   }
 
   function handleDefaultUnitsChange(nextUnits: Units) {
     const next = { ...preferences, defaultUnits: nextUnits };
     setPreferences(next);
-    void savePreferences(next).catch(() => setNotice('Could not save preferences.'));
+    void persistSettings({ preferences: next }).catch(() =>
+      setNotice('Could not save preferences.'),
+    );
   }
 
   function handleUseVariantAsDefault() {
@@ -331,7 +360,47 @@ export function App() {
       },
     };
     setPreferences(next);
-    void savePreferences(next).catch(() => setNotice('Could not save preferences.'));
+    void persistSettings({ preferences: next }).catch(() =>
+      setNotice('Could not save preferences.'),
+    );
+  }
+
+  function handleCloneProfile() {
+    const id = `user-${flavorId}-${Date.now().toString(36)}`;
+    const clone = cloneFlavor(flavor, variantId, id, `${flavor.name} clone`);
+    if (!clone) {
+      setNotice('Could not clone this profile.');
+      return;
+    }
+    const next = [...customFlavors, clone];
+    setCustomFlavors(next);
+    setFlavorId(id);
+    setVariantId(clone.variants[0].id);
+    void persistSettings({ customFlavors: next }).catch(() =>
+      setNotice('Could not save custom profiles.'),
+    );
+  }
+
+  function handleSaveCustomFlavor(updated: UserFlavor) {
+    const next = customFlavors.map((item) =>
+      item.id === updated.id ? updated : item,
+    );
+    setCustomFlavors(next);
+    void persistSettings({ customFlavors: next }).catch(() =>
+      setNotice('Could not save custom profiles.'),
+    );
+  }
+
+  function handleDeleteCustomFlavor(id: string) {
+    const next = customFlavors.filter((item) => item.id !== id);
+    setCustomFlavors(next);
+    void persistSettings({ customFlavors: next }).catch(() =>
+      setNotice('Could not save custom profiles.'),
+    );
+    if (flavorId === id) {
+      setFlavorId(initialFlavor.id);
+      setVariantId(variantForFlavor(initialFlavor.id, initialFlavor, preferences));
+    }
   }
 
   async function copyReport() {
@@ -454,7 +523,7 @@ export function App() {
       const file = await platformFileIO.openProjectFile();
       if (!file) return;
       const state = parseProjectFile(file.text);
-      const targetFlavor = builtinFlavorsById.get(state.flavorId);
+      const targetFlavor = allFlavorsById.get(state.flavorId);
       if (!targetFlavor) throw new Error(`Unknown flavor: ${state.flavorId}.`);
       if (!targetFlavor.variants.some((variant) => variant.id === state.variantId)) {
         throw new Error(`Unknown machine variant: ${state.variantId}.`);
@@ -577,9 +646,10 @@ export function App() {
               value={flavorId}
               onChange={(event) => handleFlavorChange(event.target.value)}
             >
-              {builtinFlavors.map((item) => (
+              {allFlavors.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
+                  {item.source === 'user' ? ' (custom)' : ''}
                 </option>
               ))}
             </select>
@@ -622,6 +692,15 @@ export function App() {
             {preferences.defaultVariantByFlavor[flavorId] === variantId
               ? 'Default variant'
               : 'Use as default'}
+          </button>
+
+          <button
+            type="button"
+            className="default-variant-button"
+            onClick={() => setProfileManagerOpen(true)}
+            title="Clone and edit machine profiles"
+          >
+            Profiles…
           </button>
 
           <p className="profile-meta">
@@ -756,6 +835,16 @@ export function App() {
               ×
             </button>
           </div>
+        )}
+
+        {profileManagerOpen && (
+          <ProfileManager
+            customFlavors={customFlavors}
+            onClone={handleCloneProfile}
+            onSave={handleSaveCustomFlavor}
+            onDelete={handleDeleteCustomFlavor}
+            onClose={() => setProfileManagerOpen(false)}
+          />
         )}
 
         {confirmOpen && (

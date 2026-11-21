@@ -178,7 +178,9 @@ interface EvaluationResult {
 ## Flavor data flow
 
 - Built-in flavors are static TypeScript data in `core/profiles/builtin/`.
-- User clones are persisted JSON, validated on load, and resolved together with `UserPreferences`.
+- Custom profiles are full clones of one built-in flavor/variant pair, stored as `user` flavors in the v2 settings document. A clone carries `baseFlavorId`; its variant carries `baseVariantId` so malformed stored fields can recover from the correct source variant. Built-ins are never modified.
+- Clones are validated on load: unknown bases, missing names/variants and duplicate ids are dropped; invalid fields fall back to the source variant. Rule severities and structured overrides are preserved.
+- The combined built-in + user catalog drives both profile resolution and preference validation, so saved defaults can point at a custom flavor.
 - Resolution produces a `ResolvedMachineProfile` consumed by parser/modal/interpreter/rules/simulation.
 - Custom M-codes and system variables live in the flavor/variant data, not in code branches.
 
@@ -193,7 +195,7 @@ interface EvaluationResult {
 
 - **Project folder**: `project.json` + `programs/` + `subprograms/`. Relative paths make subprogram resolution deterministic.
 - **Single-file open**: wrap the file in an ephemeral project rooted at its directory, so `M98` resolution still works.
-- **Preferences**: one versioned app settings document holds global defaults (units, per-flavor default variant). Native builds resolve the Tauri app-config directory inside bounded Rust commands so the webview never supplies a path; browser dev uses localStorage. Loaded values are validated against the current flavor/variant catalog, so stale or unknown ids fall back to shipped defaults instead of resolving to a missing profile. Project files still carry their explicit flavor and variant.
+- **Preferences and custom profiles**: one versioned app settings document (`{ version: 2, preferences, customFlavors }`) holds global defaults (units, per-flavor default variant) and full flavor clones. Native builds resolve the Tauri app-config directory inside bounded Rust commands so the webview never supplies a path; browser dev uses localStorage. Version 1 documents are migrated to an empty clone list. Loaded values are validated against the combined built-in + user catalog, so stale or unknown ids fall back to shipped defaults instead of resolving to a missing profile. Project files still carry their explicit flavor and variant.
 
 ## Testing strategy
 
