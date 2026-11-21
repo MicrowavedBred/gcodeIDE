@@ -390,6 +390,36 @@ const spindleOutOfRange: RuleDefinition = {
   },
 };
 
+/**
+ * Constant surface speed needs a finite RPM ceiling to clamp at small
+ * diameters; without one the computed RPM is unbounded near the centreline.
+ */
+const latheCssWithoutRpmLimit: RuleDefinition = {
+  id: 'lathe-css-without-rpm-limit',
+  description: 'G96 constant surface speed has no finite spindle RPM limit.',
+  defaultSeverity: 'warning',
+  check({ evaluation, profile }) {
+    if (!profile.flavor.dialect.spindle.cssSupported) return [];
+    const maxRpm = profile.flavor.dialect.spindle.rpmRange[1];
+    if (Number.isFinite(maxRpm) && maxRpm > 0) return [];
+    const diagnostics: Diagnostic[] = [];
+    for (const blockState of evaluation.blockStates) {
+      if (!blockCodes(blockState.block).includes('G96')) continue;
+      diagnostics.push(
+        diagnostic(
+          'lathe-css-without-rpm-limit',
+          'warning',
+          'G96 is active but the variant has no finite spindle RPM limit to clamp against.',
+          wordSpan(blockState.block, 'S') ??
+            wordSpan(blockState.block, 'G') ??
+            blockSpan(blockState.block),
+        ),
+      );
+    }
+    return diagnostics;
+  },
+};
+
 const rapidThroughStock: RuleDefinition = {
   id: 'rapid-through-stock',
   description: 'Rapid move passes through the stock envelope.',
@@ -510,6 +540,7 @@ export const builtinRules: RuleDefinition[] = [
   missingAbsoluteMode,
   feedOutOfRange,
   spindleOutOfRange,
+  latheCssWithoutRpmLimit,
   rapidThroughStock,
   unsafeZClearance,
   missingProgramEnd,

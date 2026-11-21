@@ -646,12 +646,14 @@ export function App() {
               value={flavorId}
               onChange={(event) => handleFlavorChange(event.target.value)}
             >
-              {allFlavors.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                  {item.source === 'user' ? ' (custom)' : ''}
-                </option>
-              ))}
+              {allFlavors
+                .filter((item) => item.machineType === 'mill')
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                    {item.source === 'user' ? ' (custom)' : ''}
+                  </option>
+                ))}
             </select>
           </label>
 

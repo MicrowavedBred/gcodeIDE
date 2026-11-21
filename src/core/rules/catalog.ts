@@ -202,6 +202,18 @@ export const ruleCatalog: RuleCatalogEntry[] = [
     description: 'M98 nesting exceeds the flavor limit.',
     owner: 'modal',
   },
+  {
+    id: 'unsupported-lathe-axis',
+    defaultSeverity: 'warning',
+    description: 'U/W axis words used on a non-lathe flavor.',
+    owner: 'modal',
+  },
+  {
+    id: 'lathe-css-without-rpm-limit',
+    defaultSeverity: 'warning',
+    description: 'G96 constant surface speed has no finite spindle RPM limit.',
+    owner: 'rules',
+  },
 ];
 
 export const ruleCatalogById = new Map(

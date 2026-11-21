@@ -244,8 +244,8 @@ Proposed impact (pending confirmation):
 
 ## Next steps
 
-1. Replace synthetic negative fixtures with real-world program cases as those become available.
-2. Start Phase 3 lathe flavors, diameter programming, U/W and G96/G97.
+1. Replace synthetic negative fixtures with real-world program cases as those become available (blocked until new private programs are supplied; the existing corpus is already used for golden traces).
+2. Phase 3 slice 2: add the 2D lathe view so the Fanuc lathe flavor can be exposed in the UI selector, then Haas Lathe and lathe canned cycles.
 
 ### Implementation status
 
@@ -254,11 +254,12 @@ Proposed impact (pending confirmation):
 | Lexer / parser | Done; zero lexical errors across the Brother corpus. |
 | Modal-state engine | Done for mill motion, units, offsets, transforms, cycles, macros, 4-axis positioning. |
 | Macro evaluator | `IF/GOTO` with forward label search, `#3000` alarms, unknown-variable approximation. |
-| Rules engine | 13 rule implementations + modal-owned diagnostics, severity overrides per flavor/variant. |
+| Rules engine | 14 rule implementations + modal-owned diagnostics, severity overrides per flavor/variant. |
 | Brother flavor | Built-in; S700XD2 variant + unbounded `unspecified` default. |
 | Corpus tests | Golden executed-block and move counts for all 10 Brother files, plus 10 synthetic negative fixtures asserting exact diagnostics for every catalog rule id. |
 | Subprogram execution | `M98`/`M99` call stack, repeat counts, depth limit, `ProgramSet` file resolution. |
 | Other flavors | Built-in Haas, Fanuc, GRBL, LinuxCNC + ten synthetic reference programs in `test/fixtures/programs/` with golden execution traces. Coverage includes arcs, cycles, offsets, cutter comp, macros, 4-axis positioning, and a GRBL negative path. |
+| Lathe core (slice 1) | Core-only Fanuc Lathe built-in flavor. Diameter `X`/`U` convert to internal millimetre radius, `W` is incremental Z, and `U`/`W` on mill flavors warn. `G96` surface speed computes an RPM clamped by `dialect.spindle.rpmRange[1]`; `G97` restores direct RPM. New `unsupported-lathe-axis` (modal) and `lathe-css-without-rpm-limit` (rules) ids are in the catalog with tests. The UI selector still shows mill flavors only; 2D lathe view, lathe cycles, rotational stock, turret rendering and Haas Lathe are deferred. |
 | Tauri shell / UI | Tauri 2 shell with Monaco editor, diagnostics panel, and three.js backplot. Native file/folder open via dialog plugin + Rust read commands; browser fallback for `pnpm dev`. |
 | Project loading | Opening a program reads it into Monaco; opening a folder loads G-code files as the main program plus external subprograms for `M98`/`M99` resolution. |
 | Save / dirty state | Save, Save as, Ctrl/Cmd+S, unsaved marker, and an unsaved-changes guard on open. Native writes go through a bounded Rust command; browser dev falls back to a text download. |

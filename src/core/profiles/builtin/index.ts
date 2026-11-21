@@ -1,6 +1,7 @@
 import { catalogFromFlavors, type PreferencesCatalog } from '../preferences';
 import type { Flavor, ResolvedMachineProfile, UserPreferences } from '../types';
 import { brotherProfile, brotherSpeedioFlavor, defaultUserPreferences as brotherDefaults } from './brother';
+import { fanucLatheFlavor, fanucLatheProfile } from './fanuc-lathe';
 import { fanucMillFlavor, fanucProfile } from './fanuc';
 import { grblFlavor, grblProfile } from './grbl';
 import { haasMillFlavor, haasProfile } from './haas';
@@ -8,6 +9,7 @@ import { linuxcncMillFlavor, linuxcncProfile } from './linuxcnc';
 
 export * from './brother';
 export * from './fanuc';
+export * from './fanuc-lathe';
 export * from './grbl';
 export * from './haas';
 export * from './linuxcnc';
@@ -19,6 +21,7 @@ export const builtinFlavors: Flavor[] = [
   fanucMillFlavor,
   grblFlavor,
   linuxcncMillFlavor,
+  fanucLatheFlavor,
 ];
 
 export const builtinFlavorsById = new Map(
@@ -55,6 +58,8 @@ export function builtinProfile(
       return haasProfile(variantId, preferences);
     case fanucMillFlavor.id:
       return fanucProfile(variantId, preferences);
+    case fanucLatheFlavor.id:
+      return fanucLatheProfile(variantId, preferences);
     case grblFlavor.id:
       return grblProfile(variantId, preferences);
     case linuxcncMillFlavor.id:

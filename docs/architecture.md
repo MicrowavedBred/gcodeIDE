@@ -17,6 +17,7 @@
 - **Brother, Haas, and Fanuc** are equal-priority built-in flavors; GRBL and LinuxCNC are built-in but secondary.
 - **4-axis**: parse A-axis moves and show positional backplot in v1. No rotary material removal.
 - **Macros**: constrained evaluator — `IF/GOTO`, `#3000` alarms, configurable system variables. Unknown variables warn; no loops or I/O.
+- **Lathe slice 1**: core-only Fanuc Lathe flavor. Diameter `X`/`U` and incremental `W` are converted to internal millimetre radius/Z in `core/gcode/modal`; `G96`/`G97` CSS computes an RPM clamped by `dialect.spindle.rpmRange[1]`. Haas Lathe, lathe cycles, rotational stock and the turret view are deferred; the UI flavor selector filters to `machineType === 'mill'` until the lathe view exists.
 
 ## Repository shape: single app, strict core boundary
 
@@ -183,6 +184,8 @@ interface EvaluationResult {
 - The combined built-in + user catalog drives both profile resolution and preference validation, so saved defaults can point at a custom flavor.
 - Resolution produces a `ResolvedMachineProfile` consumed by parser/modal/interpreter/rules/simulation.
 - Custom M-codes and system variables live in the flavor/variant data, not in code branches. The Profiles dialog edits a clone's M-code registry (code and description); the modal engine emits a `custom-mcode` event for registered codes and warns `unknown-custom-mcode` for unregistered non-standard codes.
+- `machineType` selects axis semantics in the modal engine. Mill flavors keep XYZ/A behaviour; lathe flavors halve diameter `X`/`U` into internal radius and treat `W` as incremental Z. `U`/`W` on a mill emit the modal-owned `unsupported-lathe-axis` warning.
+- CSS RPM clamping is derived from flavor data (`dialect.spindle.cssSupported` and `rpmRange[1]`), not a hardcoded limit. A CSS flavor with no finite positive ceiling emits the rules-owned `lathe-css-without-rpm-limit` warning.
 
 ## Threading
 

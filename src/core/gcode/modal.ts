@@ -280,7 +280,12 @@ export function initialMachineState(
       radiusOffset: null,
       lRegister: null,
     },
-    spindle: { rpm: null, css: null, maxRpm: null, direction: 'stop' },
+    spindle: {
+      rpm: null,
+      css: null,
+      maxRpm: profile.flavor.dialect.spindle.rpmRange[1],
+      direction: 'stop',
+    },
     coolant: 'off',
     feed: null,
     sequenceNumber: null,
@@ -572,10 +577,46 @@ function axisTarget(
   word: Word | undefined,
   distance: DistanceMode,
   units: Units,
+  scale = 1,
 ): number | undefined {
   if (!word || word.value === undefined) return undefined;
-  const value = toMm(word.value, units);
+  const value = toMm(word.value, units) * scale;
   return distance === 'incremental' ? current + value : value;
+}
+
+/**
+ * Convert constant surface speed into a clamped spindle RPM. Surface speed is
+ * m/min in mm mode and ft/min in inch mode; internal X is always a radius in
+ * millimetres. A zero diameter clamps to the configured ceiling.
+ */
+function cssRpm(
+  surfaceSpeed: number,
+  radiusMm: number,
+  units: Units,
+  maxRpm: number | null,
+): number {
+  const ceiling =
+    maxRpm !== null && Number.isFinite(maxRpm) && maxRpm > 0
+      ? maxRpm
+      : Infinity;
+  const diameterMm = radiusMm * 2;
+  if (!Number.isFinite(surfaceSpeed) || diameterMm <= 0) {
+    return ceiling === Infinity ? 0 : ceiling;
+  }
+  const surfaceMmPerMin =
+    units === 'inch' ? surfaceSpeed * 12 * MM_PER_INCH : surfaceSpeed * 1000;
+  return Math.min(surfaceMmPerMin / (Math.PI * diameterMm), ceiling);
+}
+
+/** Lathe U/W axes are always incremental, regardless of G90/G91. */
+function incrementalAxisTarget(
+  current: number,
+  word: Word | undefined,
+  units: Units,
+  scale = 1,
+): number | undefined {
+  if (!word || word.value === undefined) return undefined;
+  return current + toMm(word.value, units) * scale;
 }
 
 function axisTargetDegrees(
@@ -661,6 +702,7 @@ export function applyBlock(
   const diagnostics: Diagnostic[] = [];
   const codes = getCodes(block);
   const codeSet = new Set(codes);
+  const isLathe = profile.flavor.machineType === 'lathe';
 
   validateCodeGroups(block, profile, diagnostics);
 
@@ -724,7 +766,10 @@ export function applyBlock(
   if (codeSet.has('G99')) next.modal.cycleReturn = 'r';
 
   if (codeSet.has('G96')) next.modal.spindleMode = 'css';
-  if (codeSet.has('G97')) next.modal.spindleMode = 'rpm';
+  if (codeSet.has('G97')) {
+    next.modal.spindleMode = 'rpm';
+    next.spindle.css = null;
+  }
 
   if (codeSet.has('G69')) next.modal.rotation = null;
   if (codeSet.has('G68')) {
@@ -788,8 +833,19 @@ export function applyBlock(
 
   const sWord = getWord(block, 'S');
   if (sWord?.value !== undefined) {
-    if (next.modal.spindleMode === 'css') next.spindle.css = sWord.value;
-    else next.spindle.rpm = sWord.value;
+    if (next.modal.spindleMode === 'css') {
+      next.spindle.css = sWord.value;
+      if (profile.flavor.dialect.spindle.cssSupported) {
+        next.spindle.rpm = cssRpm(
+          sWord.value,
+          next.position.x,
+          units,
+          next.spindle.maxRpm,
+        );
+      }
+    } else {
+      next.spindle.rpm = sWord.value;
+    }
   }
 
   const fWord = getWord(block, 'F');
@@ -864,12 +920,48 @@ export function applyBlock(
     const y = getWord(block, 'Y');
     const z = getWord(block, 'Z');
     const a = getWord(block, 'A');
+    const u = getWord(block, 'U');
+    const w = getWord(block, 'W');
+
+    if (!isLathe) {
+      for (const word of [u, w]) {
+        if (word?.value !== undefined) {
+          diagnostics.push(
+            diagnostic(
+              'unsupported-lathe-axis',
+              'warning',
+              `Axis ${word.letter} is only supported on lathe flavors; ignoring.`,
+              word.span,
+            ),
+          );
+        }
+      }
+    }
 
     if (machineMove) {
-      if (x?.value !== undefined) target.x = toMm(x.value, units);
-      if (y?.value !== undefined) target.y = toMm(y.value, units);
+      if (x?.value !== undefined) {
+        target.x = toMm(x.value, units) * (isLathe ? 0.5 : 1);
+      }
+      if (!isLathe && y?.value !== undefined) target.y = toMm(y.value, units);
       if (z?.value !== undefined) target.z = toMm(z.value, units);
-      if (a?.value !== undefined) target.a = a.value;
+      if (!isLathe && a?.value !== undefined) target.a = a.value;
+    } else if (isLathe) {
+      // X is diameter-programmed; store the radius internally. U is an
+      // incremental diameter, W an incremental Z.
+      const xt = axisTarget(
+        next.position.x,
+        x,
+        next.modal.distance,
+        units,
+        0.5,
+      );
+      const zt = axisTarget(next.position.z, z, next.modal.distance, units);
+      if (xt !== undefined) target.x = xt;
+      if (zt !== undefined) target.z = zt;
+      const ut = incrementalAxisTarget(target.x, u, units, 0.5);
+      const wt = incrementalAxisTarget(target.z, w, units);
+      if (ut !== undefined) target.x = ut;
+      if (wt !== undefined) target.z = wt;
     } else {
       const xt = axisTarget(next.position.x, x, next.modal.distance, units);
       const yt = axisTarget(next.position.y, y, next.modal.distance, units);
@@ -885,7 +977,8 @@ export function applyBlock(
       if (at !== undefined) target.a = at;
     }
 
-    const hasAxisWord = Boolean(x || y || z || a);
+    const hasAxisWord = Boolean(x || z || (isLathe ? u || w : y || a));
+    const firstAxisWord = x ?? z ?? (isLathe ? u ?? w : y ?? a);
     const mode = motionCode ?? next.modal.motion;
 
     if (!motionCode && hasAxisWord && !next.modal.motionInitialized) {
@@ -894,7 +987,7 @@ export function applyBlock(
           'missing-motion-mode',
           'warning',
           'Axis words appear before any motion mode has been established; assuming G0.',
-          (x ?? y ?? z ?? a)?.span ?? {
+          firstAxisWord?.span ?? {
             file: block.file,
             line: block.line,
             column: 1,
@@ -954,7 +1047,7 @@ export function applyBlock(
           'motion-cancelled',
           'warning',
           'Axis words follow G80 with no active motion mode.',
-          (x ?? y ?? z ?? a)?.span ?? {
+          firstAxisWord?.span ?? {
             file: block.file,
             line: block.line,
             column: 1,

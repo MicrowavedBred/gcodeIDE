@@ -41,13 +41,14 @@ function analyze(file: string, profile: ResolvedMachineProfile) {
 }
 
 describe('built-in flavor registry', () => {
-  it('includes all five mill flavors with a default variant each', () => {
+  it('includes all built-in flavors with a default variant each', () => {
     expect(builtinFlavors.map((flavor) => flavor.id)).toEqual([
       'brother-speedio',
       'haas-mill',
       'fanuc-mill',
       'grbl',
       'linuxcnc-mill',
+      'fanuc-lathe',
     ]);
     for (const flavor of builtinFlavors) {
       const defaultId = builtinUserPreferences.defaultVariantByFlavor[flavor.id];
