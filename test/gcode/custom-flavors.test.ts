@@ -87,6 +87,53 @@ describe('custom flavor clones', () => {
     expect(loaded).toEqual(clone);
   });
 
+  it('round-trips user-defined M-code descriptions', () => {
+    const clone = makeClone();
+    clone.customMCodes = {
+      M400: {
+        code: 'M400',
+        description: 'Clamp release',
+        category: 'clamp',
+        affectsSimulation: false,
+      },
+      M777: { code: 'M777', description: 'Door interlock bypass' },
+    };
+
+    const [loaded] = normalizeCustomFlavors(
+      JSON.parse(JSON.stringify([clone])),
+      builtinFlavorsById,
+    );
+
+    expect(loaded.customMCodes).toEqual(clone.customMCodes);
+  });
+
+  it('drops malformed M-code entries and falls back to the base registry', () => {
+    const clone = makeClone();
+    const stored = JSON.parse(JSON.stringify([clone]));
+    stored[0].customMCodes = {
+      M400: { code: 'M400', description: 'Valid', category: 'probe', affectsSimulation: true },
+      m401: { code: 'm401', description: 'Lowercase key' },
+      M402: { code: 'M999', description: 'Code mismatch' },
+      M403: { code: 'M403', description: '' },
+      M404: { code: 'M404', description: 42 },
+      M405: { code: 'M405', description: 'Bad category', category: 'turbo' },
+      notAnMCode: { code: 'notAnMCode', description: 'Bad key' },
+    };
+
+    const [loaded] = normalizeCustomFlavors(stored, builtinFlavorsById);
+
+    expect(loaded.customMCodes).toEqual({
+      M400: { code: 'M400', description: 'Valid', category: 'probe', affectsSimulation: true },
+      M403: { code: 'M403', description: '' },
+      M405: { code: 'M405', description: 'Bad category' },
+    });
+
+    const broken = JSON.parse(JSON.stringify([clone]));
+    broken[0].customMCodes = 'not-a-record';
+    const [fallback] = normalizeCustomFlavors(broken, builtinFlavorsById);
+    expect(fallback.customMCodes).toEqual(haasMillFlavor.customMCodes);
+  });
+
   it('drops duplicate clone ids', () => {
     const clone = makeClone();
     const loaded = normalizeCustomFlavors(

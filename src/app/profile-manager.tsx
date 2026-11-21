@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ruleCatalog } from '../core/rules/catalog';
 import type {
+  CustomMCodeDef,
   MachineVariant,
   Orientation,
   Travels,
@@ -27,6 +28,8 @@ const severityChoices: Array<{ value: RuleChoice; label: string }> = [
   { value: 'info', label: 'Info' },
   { value: 'off', label: 'Off' },
 ];
+
+const mCodePattern = /^M\d+$/;
 
 function numeric(value: string): number | undefined {
   if (value.trim() === '') return undefined;
@@ -60,6 +63,15 @@ export function ProfileManager({
     () => customFlavors[0] ?? null,
   );
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [newMCode, setNewMCode] = useState('');
+  const [newMCodeDescription, setNewMCodeDescription] = useState('');
+  const [mCodeError, setMCodeError] = useState('');
+
+  useEffect(() => {
+    setNewMCode('');
+    setNewMCodeDescription('');
+    setMCodeError('');
+  }, [draft?.id]);
 
   useEffect(() => {
     if (customFlavors.length === 0) {
@@ -122,6 +134,65 @@ export function ProfileManager({
       else rules[ruleId] = choice;
       return { ...current, rules };
     });
+  }
+
+  function updateMCode(code: string, patch: Partial<CustomMCodeDef>) {
+    setDraft((current) => {
+      if (!current || !current.customMCodes[code]) return current;
+      return {
+        ...current,
+        customMCodes: {
+          ...current.customMCodes,
+          [code]: { ...current.customMCodes[code], ...patch },
+        },
+      };
+    });
+  }
+
+  function removeMCode(code: string) {
+    setDraft((current) => {
+      if (!current || !current.customMCodes[code]) return current;
+      const customMCodes = { ...current.customMCodes };
+      delete customMCodes[code];
+      return { ...current, customMCodes };
+    });
+  }
+
+  function addMCode() {
+    if (!draft) return;
+    const code = newMCode.trim().toUpperCase();
+    const description = newMCodeDescription.trim();
+    if (!mCodePattern.test(code)) {
+      setMCodeError('Use M followed by digits, for example M400.');
+      return;
+    }
+    if (draft.customMCodes[code]) {
+      setMCodeError(`${code} is already defined.`);
+      return;
+    }
+    if (!description) {
+      setMCodeError('Enter a description.');
+      return;
+    }
+    setDraft((current) =>
+      current
+        ? {
+            ...current,
+            customMCodes: {
+              ...current.customMCodes,
+              [code]: {
+                code,
+                description,
+                category: 'other',
+                affectsSimulation: false,
+              },
+            },
+          }
+        : current,
+    );
+    setNewMCode('');
+    setNewMCodeDescription('');
+    setMCodeError('');
   }
 
   const variant = draft?.variants[0];
@@ -301,6 +372,77 @@ export function ProfileManager({
                     </label>
                   ))}
                 </div>
+              </details>
+
+              <details className="profile-rules">
+                <summary>
+                  Custom M-codes ({Object.keys(draft.customMCodes).length} defined)
+                </summary>
+                <div className="profile-rule-list">
+                  {Object.values(draft.customMCodes)
+                    .filter(
+                      (entry) =>
+                        entry &&
+                        typeof entry.code === 'string' &&
+                        typeof entry.description === 'string',
+                    )
+                    .sort((a, b) => a.code.localeCompare(b.code))
+                    .map((entry) => (
+                      <div className="profile-rule" key={entry.code}>
+                        <span className="profile-mcode-code">{entry.code}</span>
+                        <input
+                          className="profile-mcode-description"
+                          aria-label={`Description for ${entry.code}`}
+                          value={entry.description}
+                          onChange={(event) =>
+                            updateMCode(entry.code, {
+                              description: event.target.value,
+                            })
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="profile-mcode-remove"
+                          aria-label={`Remove ${entry.code}`}
+                          onClick={() => removeMCode(entry.code)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                </div>
+                <div className="profile-row profile-mcode-add">
+                  <label className="control">
+                    <span>Code</span>
+                    <input
+                      value={newMCode}
+                      placeholder="M400"
+                      onChange={(event) => {
+                        setNewMCode(event.target.value);
+                        setMCodeError('');
+                      }}
+                    />
+                  </label>
+                  <label className="control">
+                    <span>Description</span>
+                    <input
+                      value={newMCodeDescription}
+                      placeholder="Clamp release"
+                      onChange={(event) => {
+                        setNewMCodeDescription(event.target.value);
+                        setMCodeError('');
+                      }}
+                    />
+                  </label>
+                  <button type="button" onClick={addMCode}>
+                    Add
+                  </button>
+                </div>
+                {mCodeError && (
+                  <p className="profile-mcode-error" role="alert">
+                    {mCodeError}
+                  </p>
+                )}
               </details>
             </div>
           ) : (

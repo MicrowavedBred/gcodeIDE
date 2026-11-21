@@ -9,7 +9,13 @@ import {
   type MachineState,
 } from '../../src/core/gcode/modal';
 import { parseLine, parseProgram } from '../../src/core/gcode/parser';
-import { brotherProfile } from '../../src/core/profiles/builtin/brother';
+import { builtinUserPreferences } from '../../src/core/profiles/builtin';
+import {
+  brotherProfile,
+  brotherSpeedioFlavor,
+} from '../../src/core/profiles/builtin/brother';
+import { cloneFlavor } from '../../src/core/profiles/custom-flavors';
+import { resolveProfile } from '../../src/core/profiles/types';
 
 const profile = brotherProfile();
 const corpusDir = fileURLToPath(
@@ -103,6 +109,45 @@ describe('modal state transitions', () => {
   it('warns on unknown M-codes', () => {
     const result = apply('M499');
     expect(result.diagnostics[0]?.ruleId).toBe('unknown-custom-mcode');
+  });
+
+  it('uses a user-defined M-code description from a custom profile', () => {
+    const clone = cloneFlavor(
+      brotherSpeedioFlavor,
+      'brother-unspecified',
+      'user-brother-mcode',
+      'Shop Brother',
+    );
+    if (!clone) throw new Error('expected a clone');
+    clone.customMCodes = {
+      M777: {
+        code: 'M777',
+        description: 'Fixture clamp release',
+        category: 'clamp',
+        affectsSimulation: false,
+      },
+    };
+    const customProfile = resolveProfile(
+      clone,
+      clone.variants[0],
+      builtinUserPreferences,
+    );
+    const { block } = parseLine('M777', 'test.nc', 1, 0);
+    const result = applyBlock(
+      initialMachineState(customProfile),
+      block,
+      customProfile,
+    );
+
+    expect(result.events.find((event) => event.kind === 'custom-mcode')).toMatchObject({
+      code: 'M777',
+      description: 'Fixture clamp release',
+    });
+    expect(
+      result.diagnostics.some(
+        (diagnostic) => diagnostic.ruleId === 'unknown-custom-mcode',
+      ),
+    ).toBe(false);
   });
 });
 

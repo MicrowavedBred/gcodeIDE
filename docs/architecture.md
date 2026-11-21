@@ -179,10 +179,10 @@ interface EvaluationResult {
 
 - Built-in flavors are static TypeScript data in `core/profiles/builtin/`.
 - Custom profiles are full clones of one built-in flavor/variant pair, stored as `user` flavors in the v2 settings document. A clone carries `baseFlavorId`; its variant carries `baseVariantId` so malformed stored fields can recover from the correct source variant. Built-ins are never modified.
-- Clones are validated on load: unknown bases, missing names/variants and duplicate ids are dropped; invalid fields fall back to the source variant. Rule severities and structured overrides are preserved.
+- Clones are validated on load: unknown bases, missing names/variants and duplicate ids are dropped; invalid fields fall back to the source variant. Rule severities and structured overrides are preserved. The vendor M-code registry is validated separately: only `M\d+` keys with a matching `code` and a string `description` survive; invalid optional `category`/`affectsSimulation` fields are ignored, and a non-object registry falls back to the base.
 - The combined built-in + user catalog drives both profile resolution and preference validation, so saved defaults can point at a custom flavor.
 - Resolution produces a `ResolvedMachineProfile` consumed by parser/modal/interpreter/rules/simulation.
-- Custom M-codes and system variables live in the flavor/variant data, not in code branches.
+- Custom M-codes and system variables live in the flavor/variant data, not in code branches. The Profiles dialog edits a clone's M-code registry (code and description); the modal engine emits a `custom-mcode` event for registered codes and warns `unknown-custom-mcode` for unregistered non-standard codes.
 
 ## Threading
 

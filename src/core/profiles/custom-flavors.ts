@@ -1,5 +1,6 @@
 import type {
   CapabilityFlags,
+  CustomMCodeDef,
   DisplaySettings,
   Flavor,
   GeometrySettings,
@@ -46,6 +47,40 @@ function normalizeRuleOverrides(
       }
       result[ruleId] = override;
     }
+  }
+  return result;
+}
+
+const customMCodeCategories: Array<NonNullable<CustomMCodeDef['category']>> = [
+  'clamp',
+  'coolant',
+  'door',
+  'conveyor',
+  'probe',
+  'other',
+];
+
+/** Validates the persisted vendor M-code registry; malformed entries are dropped. */
+function normalizeCustomMCodes(
+  value: unknown,
+  fallback: Record<string, CustomMCodeDef>,
+): Record<string, CustomMCodeDef> {
+  const source = isRecord(value) ? value : fallback;
+  const result: Record<string, CustomMCodeDef> = {};
+  for (const [key, entry] of Object.entries(source)) {
+    if (!/^M\d+$/.test(key) || !isRecord(entry)) continue;
+    const code = typeof entry.code === 'string' ? entry.code : key;
+    if (code !== key || typeof entry.description !== 'string') {
+      continue;
+    }
+    const definition: CustomMCodeDef = { code, description: entry.description };
+    if (customMCodeCategories.includes(entry.category as NonNullable<CustomMCodeDef['category']>)) {
+      definition.category = entry.category as CustomMCodeDef['category'];
+    }
+    if (typeof entry.affectsSimulation === 'boolean') {
+      definition.affectsSimulation = entry.affectsSimulation;
+    }
+    result[key] = definition;
   }
   return result;
 }
@@ -191,7 +226,7 @@ function normalizeCustomFlavor(
     dialect: recordOr(value.dialect, base.dialect),
     capabilities: recordOr(value.capabilities, base.capabilities),
     display: recordOr(value.display, base.display),
-    customMCodes: recordOr(value.customMCodes, base.customMCodes),
+    customMCodes: normalizeCustomMCodes(value.customMCodes, base.customMCodes),
     systemVariables: recordOr(value.systemVariables, base.systemVariables),
     metadata: recordOr(value.metadata, base.metadata),
   };

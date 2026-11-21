@@ -244,9 +244,8 @@ Proposed impact (pending confirmation):
 
 ## Next steps
 
-1. Finish the Phase 1 setup gaps: custom M-code registry UI.
-2. Replace synthetic negative fixtures with real-world program cases as those become available.
-3. Start Phase 3 lathe flavors, diameter programming, U/W and G96/G97.
+1. Replace synthetic negative fixtures with real-world program cases as those become available.
+2. Start Phase 3 lathe flavors, diameter programming, U/W and G96/G97.
 
 ### Implementation status
 
@@ -266,6 +265,7 @@ Proposed impact (pending confirmation):
 | Project files | Versioned `.gcodeide` JSON stores flavor, variant, folder association, and a relative main-program path. Native open resolves the saved folder path; browser import reselects the folder. |
 | User preferences | Versioned app settings document stores default units and per-flavor default variant. Native builds use the Tauri config dir via bounded commands; browser dev uses localStorage. Values are normalized against current flavors/variants on load, and the toolbar exposes default units plus a one-click default variant. |
 | Custom profiles | Version 2 settings also store full flavor/variant clones. The Profiles dialog clones the current built-in or custom profile and edits name, variant name, units, orientation, travels, rapid/feed rates, and rule severities. Clones are validated on load, appear in the flavor selector, and resolve through the combined catalog. |
+| Custom M-code registry | The Profiles dialog edits the clone's vendor M-code registry: edit descriptions of inherited codes, add `M`+digits codes with unique keys, and remove codes. Load validation keeps valid `M\d+` entries with string descriptions, drops malformed keys/code mismatches, and ignores invalid optional fields. Clearing a description keeps the code registered; the add form still requires text. The modal engine emits `custom-mcode` with the user's description and stops warning `unknown-custom-mcode`. |
 | Canonical toolpath | `core/interpreter` derives ordered `Move[]`, sampled geometry, bounds, counts and travel lengths; the three.js backplot is a thin renderer. `R`-only arcs still draw as straight chords. |
 | Stock simulation | `core/simulation` sweeps a tool through a 2.5D height map with flat, ball-nose, or bull-nose tips (G-code Z is the lowest tip point; corner radius clamped to half diameter). Toolbar configures stock size, top Z, tool diameter, tip shape, corner R and safe Z. `rapid-through-stock` uses time-of-execution penetration evidence; `unsafe-z-clearance` activates from configured safe Z once a work-coordinate Z word has been commanded. Backplot draws the envelope and remaining-material surface. |
 | Simulation worker | Numeric stock simulation runs in a Vite-bundled Web Worker shared by browser and Tauri; parse/evaluate/rules stay on the UI thread. Penetrations cross by move index and the identity-keyed Map is rebuilt on receipt. Async analysis falls back to synchronous simulation; the UI ignores stale results. |
